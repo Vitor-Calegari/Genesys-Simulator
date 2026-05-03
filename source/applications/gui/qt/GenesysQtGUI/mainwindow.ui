@@ -1339,6 +1339,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="separator"/>
    <addaction name="actionAnimateExpression"/>
    <addaction name="actionAnimateVariable"/>
+   <addaction name="separator"/>
+   <addaction name="actionExpressionBuilder"/>
+   <addaction name="separator"/>
    <addaction name="actionAnimatePlot"/>
    <addaction name="actionAnimateResource"/>
    <addaction name="actionAnimateQueue"/>
@@ -1859,6 +1862,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="text">
     <string>Expression</string>
+   </property>
+  </action>
+  <action name="actionExpressionBuilder">
+   <property name="icon">
+    <iconset resource="GenesysQtGUI_resources.qrc">
+     <normaloff>:/icons3/resources/icons/pack3/ico/calculator.ico</normaloff>:/icons3/resources/icons/pack3/ico/calculator.ico</iconset>
+   </property>
+   <property name="text">
+    <string>Expression Builder</string>
+   </property>
+   <property name="toolTip">
+    <string>Open Expression Builder</string>
    </property>
   </action>
   <action name="actionAnimateResource">
