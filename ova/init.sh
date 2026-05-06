@@ -89,12 +89,10 @@ if [[ "$LOCAL" != "$REMOTE" || "$FIRST_INSTALL" == 0 ]]; then
         rm -rf "$REPO_DIR/Genesys-Simulator/build/"
 
         # qtcreator já está no menu iniciar por padrão
-
-        # --- Configuração do Auto-Start (Systemd User Service) ---
+        
         USER_SERVICE_DIR="$HOME/.config/systemd/user"
         mkdir -p "$USER_SERVICE_DIR"
 
-        # Usando printf para criar o arquivo de serviço sem bugs de linter
         printf '[Unit]\nDescription=GenESyS Web Server\nAfter=network.target\n\n[Service]\nExecStart=%s/%s\nWorkingDirectory=%s\nRestart=always\n\n[Install]\nWantedBy=default.target\n' \
             "$INSTALL_DIR" \
             "$GENESYS_WEB_APP_EXEC" \
