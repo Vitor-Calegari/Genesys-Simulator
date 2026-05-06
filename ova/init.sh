@@ -64,14 +64,18 @@ if [[ "$LOCAL" != "$REMOTE" || "$FIRST_INSTALL" == 0 ]]; then
 
         git pull origin "$BRANCH"
 
+        # Compila interface gráfica
         cmake --preset gui-app
         cmake --build --preset gui-app
-
         cp -a "$BUILD_GENESYS_GUI_APP_PATH" "$INSTALL_DIR"
+
+        # Compila interface servidor
+        cmake --preset web-app
+        cmake --build --preset web-app
+        cp -a "$BUILD_GENESYS_WEB_APP_PATH" "$INSTALL_DIR"
+
         cp -a "$PROJECT_ICON_PATH" "$ICON_DIR"
-
         mkdir -p "$DESKTOP_APP_DIR"
-
         printf '%s\n' \
             "[Desktop Entry]" \
             "Name=$GENESYS_GUI_APP_DISPLAY_NAME" \
@@ -86,11 +90,23 @@ if [[ "$LOCAL" != "$REMOTE" || "$FIRST_INSTALL" == 0 ]]; then
 
         # qtcreator já está no menu iniciar por padrão
 
-        # TODO Adicionar web-app quando compilar corretamente
-        # TODO Adicionar inicialização do servidor quando disponível
+        # --- Configuração do Auto-Start (Systemd User Service) ---
+        USER_SERVICE_DIR="$HOME/.config/systemd/user"
+        mkdir -p "$USER_SERVICE_DIR"
+
+        # Usando printf para criar o arquivo de serviço sem bugs de linter
+        printf '[Unit]\nDescription=GenESyS Web Server\nAfter=network.target\n\n[Service]\nExecStart=%s/%s\nWorkingDirectory=%s\nRestart=always\n\n[Install]\nWantedBy=default.target\n' \
+            "$INSTALL_DIR" \
+            "$GENESYS_WEB_APP_EXEC" \
+            "$INSTALL_DIR" \
+            > "$USER_SERVICE_DIR/genesys-web.service"
+
+        # Ativação do serviço
+        systemctl --user daemon-reload
+        systemctl --user enable genesys-web.service
+        systemctl --user restart genesys-web.service
 
         kill $PID 2>/dev/null
-
         gxmessage "Repositório atualizado."
     else
         gxmessage "Atualização cancelada."
