@@ -137,7 +137,7 @@ setup_startup_script() {
   AUTOSTART_DIR="$USER_HOME/.config/autostart"
   AUTOSTART_FILE="$AUTOSTART_DIR/genesys_init.desktop"
 
-  SCRIPT_URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/rlcancian/ova/init.sh"
+  SCRIPT_URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/ova/init.sh"
 
   echo "[+] Criando diretórios..."
   mkdir -p "$USER_HOME/.local/bin"
@@ -173,7 +173,7 @@ EOF
 }
 
 install_guest_add_util() {
-  local URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/rlcancian/ova/install_guest_add.sh"
+  local URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/ova/install_guest_add.sh"
   local TARGET="/usr/local/bin/install_guest_add"
 
   echo "[+] Instalando utilitário install_guest_add..."
@@ -194,7 +194,7 @@ setup_ova_updater() {
 
   local RUNNER="/usr/local/bin/ova_update_runner"
   local SERVICE="/etc/systemd/system/ova-update.service"
-  local UPDATE_URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/rlcancian/ova/update.sh"
+  local UPDATE_URL="https://raw.githubusercontent.com/rlcancian/Genesys-Simulator/refs/heads/ova/update.sh"
 
   # Runner (falha de propósito se não conseguir baixar)
   cat > "$RUNNER" <<EOF
