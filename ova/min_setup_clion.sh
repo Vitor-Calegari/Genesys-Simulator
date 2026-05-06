@@ -26,17 +26,6 @@ cd "$USER_HOME"
 wget -O - https://download.jetbrains.com/cpp/CLion-2026.1.tar.gz | tar -xz
 mv clion-* clion
 
-cd clion/plugins
-rm -rf angular-plugin react-plugin vuejs-plugin
-rm -rf python-ce javascript-* nodeJS
-rm -rf DatabaseTools clouds-* docker-*
-rm -rf web* css* html* sass* less*
-rm -rf tailwindcss postcss webpack styled-components
-rm -rf color-scheme-* keymap-* localization-*
-rm -rf qodana intellij-rust
-rm -rf nextjs prettierJS tslint qml-plugin
-rm -rf restClient gateway-plugin remote-dev-server
-
 # Criar atalho no menu (Development)
 mkdir -p ~/.local/share/applications
 
