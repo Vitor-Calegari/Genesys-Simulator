@@ -32,7 +32,7 @@ install_gui() {
 install_prereqs() {
   echo "[+] Instalando pré-requisitos (git, g++, Qt6, Graphviz)"
   apt install -y \
-    git g++ vim cmake ninja-build gxmessage \
+    git g++ vim cmake ninja-build gxmessage wget curl \
     qt6-base-dev qt6-base-dev-tools \
     qt6-tools-dev qt6-tools-dev-tools \
     qt6-charts-dev qtcreator \
@@ -114,13 +114,12 @@ configure_shortcuts() {
         <command>xterm</command>\
       </action>\
     </keybind>' "$OPENBOX_CONF"
-  
-    # Propaga para usuário
-    USER_CONF="/home/${USER_NAME}/.config/openbox"
-    mkdir -p "$USER_CONF"
-    cp "$OPENBOX_CONF" "$USER_CONF/lxde-rc.xml"
-    chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}/.config
-  fi
+
+      USER_CONF="/home/${USER_NAME}/.config/openbox"
+      mkdir -p "$USER_CONF"
+      cp "$OPENBOX_CONF" "$USER_CONF/lxde-rc.xml"
+      chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}/.config
+    fi
   else
     echo "Arquivo $OPENBOX_CONF não encontrado"
   fi
