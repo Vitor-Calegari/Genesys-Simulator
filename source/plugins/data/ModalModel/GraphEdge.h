@@ -26,6 +26,7 @@ class GraphNode;
 class GraphEdge : public ModelDataDefinition {
 public:
 	GraphEdge(Model* model, std::string name = "");
+	GraphEdge(Model* model, std::string name, std::string dataDefinitionTypename);
 	GraphEdge(Model* model, GraphNode* source, GraphNode* destination, std::string name = "");
 	virtual ~GraphEdge() override = default;
 

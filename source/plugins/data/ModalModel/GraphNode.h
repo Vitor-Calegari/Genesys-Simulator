@@ -20,6 +20,7 @@
 class GraphNode : public DefaultNode {
 public:
 	GraphNode(Model* model, std::string name = "");
+	GraphNode(Model* model, std::string name, std::string dataDefinitionTypename);
 	virtual ~GraphNode() override = default;
 
 public:

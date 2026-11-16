@@ -13,6 +13,10 @@ GraphNode::GraphNode(Model* model, std::string name)
 	: DefaultNode(model, Util::TypeOf<GraphNode>(), name) {
 }
 
+GraphNode::GraphNode(Model* model, std::string name, std::string dataDefinitionTypename)
+	: DefaultNode(model, dataDefinitionTypename, name) {
+}
+
 PluginInformation* GraphNode::GetPluginInformation() {
 	PluginInformation* info = new PluginInformation(Util::TypeOf<GraphNode>(), &GraphNode::LoadInstance, &GraphNode::NewInstance);
 	info->setCategory("ModalModel");

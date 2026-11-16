@@ -15,6 +15,10 @@ GraphEdge::GraphEdge(Model* model, std::string name)
 	: ModelDataDefinition(model, Util::TypeOf<GraphEdge>(), name) {
 }
 
+GraphEdge::GraphEdge(Model* model, std::string name, std::string dataDefinitionTypename)
+	: ModelDataDefinition(model, dataDefinitionTypename, name) {
+}
+
 GraphEdge::GraphEdge(Model* model, GraphNode* source, GraphNode* destination, std::string name)
 	: ModelDataDefinition(model, Util::TypeOf<GraphEdge>(), name), _source(source), _destination(destination) {
 	_syncEndpointNames();

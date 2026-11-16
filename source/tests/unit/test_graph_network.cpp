@@ -69,6 +69,17 @@ std::vector<std::string> names(const std::vector<GraphNode*>& nodes) {
 
 } // namespace
 
+TEST(GraphNetworkTest, DerivedVerticesAndEdgesKeepConcreteRegistryTypes) {
+	Simulator simulator;
+	Model* model = simulator.getModelManager()->newModel();
+	GraphNode node(model, "DerivedNode", "DerivedGraphNode");
+	GraphEdge edge(model, "DerivedEdge", "DerivedGraphEdge");
+	EXPECT_EQ(node.getClassname(), "DerivedGraphNode");
+	EXPECT_EQ(edge.getClassname(), "DerivedGraphEdge");
+	EXPECT_EQ(model->getDataManager()->getDataDefinition("DerivedGraphNode", "DerivedNode"), &node);
+	EXPECT_EQ(model->getDataManager()->getDataDefinition("DerivedGraphEdge", "DerivedEdge"), &edge);
+}
+
 TEST(GraphNetworkTest, ProgrammaticVerticesAndEdgesBelongToNetworkEditingLevel) {
 	Simulator simulator;
 	Model* model = simulator.getModelManager()->newModel();
