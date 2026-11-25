@@ -11,6 +11,8 @@
 #include "plugins/components/ModalModel/ModalModel.h"
 #include "plugins/data/Agents/AgentNetwork.h"
 
+#include <cstdio>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <memory>
@@ -320,4 +322,24 @@ TEST_F(AgentsTest, ModelCheckRejectsTheThreeCases) {
 	error.clear();
 	EXPECT_FALSE(ModelDataDefinition::Check(network, error));
 	EXPECT_NE(error.find("Agent \"A\" has a world model of type OtherWorldModel"), std::string::npos);
+}
+
+TEST_F(AgentsTest, SaveKeepsEachWorldModelInsideItsAgent) {
+	agents({"A", "B"}, [](const AgentPerception&, const TestWorldModel*, TestDecision*) {});
+	channel("A", "B");
+	channel("B", "A");
+	environment();
+	network->setFailureLimit(3);
+	const std::string filename = testing::TempDir() + "genesys_test_agents.gen";
+	ASSERT_TRUE(model->save(filename));
+	std::ifstream file(filename);
+	const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	std::remove(filename.c_str());
+	EXPECT_NE(text.find("AgentNode  \"A\" worldModel.typename=\"TestWorldModel\""), std::string::npos);
+	EXPECT_NE(text.find("graphNode[0].worldModel.typename=\"TestWorldModel\""), std::string::npos);
+	EXPECT_NE(text.find("environment.typename=\"TestEnvironment\""), std::string::npos);
+	EXPECT_NE(text.find("graphEdge[0].acceptedMessageTypes=\"TestMessage\""), std::string::npos);
+	EXPECT_NE(text.find("failureLimit=3"), std::string::npos);
+	EXPECT_EQ(text.find("TestWorldModel \""), std::string::npos);
+	EXPECT_EQ(text.find("TestEnvironment \""), std::string::npos);
 }

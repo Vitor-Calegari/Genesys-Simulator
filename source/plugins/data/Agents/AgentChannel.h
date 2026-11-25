@@ -25,6 +25,10 @@ public:
 	const std::vector<std::string>& acceptedMessageTypes() const;
 	bool accepts(const std::string& type) const;
 
+protected:
+	virtual bool _loadInstance(PersistenceRecord* fields) override;
+	virtual void _saveInstance(PersistenceRecord* fields, bool saveDefaultValues) override;
+
 private:
 	std::vector<std::string> _acceptedMessageTypes;
 };

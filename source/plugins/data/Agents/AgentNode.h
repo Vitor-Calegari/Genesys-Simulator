@@ -25,6 +25,12 @@ public:
 	/*! \brief The agent takes ownership of \p worldModel. */
 	void setWorldModel(AgentWorldModel* worldModel);
 	AgentWorldModel* getWorldModel() const;
+	/*! \brief Finds the behavior named \p name among the behaviors of \p model, of any subclass. */
+	static AgentBehavior* FindBehavior(Model* model, const std::string& name);
+
+protected:
+	virtual bool _loadInstance(PersistenceRecord* fields) override;
+	virtual void _saveInstance(PersistenceRecord* fields, bool saveDefaultValues) override;
 
 private:
 	AgentBehavior* _behavior = nullptr;

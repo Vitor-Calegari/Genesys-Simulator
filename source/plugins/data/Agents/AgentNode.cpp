@@ -1,4 +1,5 @@
 #include "AgentNode.h"
+#include "AgentPersistence.h"
 
 #include "kernel/simulator/PluginInformation.h"
 #include "kernel/simulator/model/Model.h"
@@ -31,6 +32,11 @@ ModelDataDefinition* AgentNode::LoadInstance(Model* model, PersistenceRecord* fi
 	if (existing != nullptr) {
 		return existing;
 	}
+	// The behavior is another element of the model. Until it is loaded, the loader tries this agent again.
+	const std::string behavior = fields->loadField("behavior", std::string(""));
+	if (!behavior.empty() && FindBehavior(model, behavior) == nullptr) {
+		return nullptr;
+	}
 	AgentNode* agent = new AgentNode(model);
 	agent->_loadInstance(fields);
 	return agent;
@@ -62,4 +68,30 @@ void AgentNode::setWorldModel(AgentWorldModel* worldModel) {
 
 AgentWorldModel* AgentNode::getWorldModel() const {
 	return _worldModel;
+}
+
+AgentBehavior* AgentNode::FindBehavior(Model* model, const std::string& name) {
+	for (AgentBehavior* behavior : model->getDataManager()->getDataDefinitionsAssignableTo<AgentBehavior>()) {
+		if (behavior->getName() == name) {
+			return behavior;
+		}
+	}
+	return nullptr;
+}
+
+bool AgentNode::_loadInstance(PersistenceRecord* fields) {
+	bool res = GraphNode::_loadInstance(fields);
+	if (res) {
+		setBehavior(FindBehavior(_parentModel, fields->loadField("behavior", std::string(""))));
+		setWorldModel(dynamic_cast<AgentWorldModel*>(LoadNested(_parentModel, fields, "worldModel.")));
+	}
+	return res;
+}
+
+void AgentNode::_saveInstance(PersistenceRecord* fields, bool saveDefaultValues) {
+	GraphNode::_saveInstance(fields, saveDefaultValues);
+	fields->saveField("behavior", _behavior != nullptr ? _behavior->getName() : std::string(""));
+	if (_worldModel != nullptr) {
+		SaveNested(fields, "worldModel.", _worldModel);
+	}
 }

@@ -1,4 +1,5 @@
 #include "AgentNetwork.h"
+#include "AgentPersistence.h"
 
 #include "kernel/simulator/PluginInformation.h"
 #include "kernel/simulator/essentialPlugins/Counter.h"
@@ -38,6 +39,13 @@ PluginInformation* AgentNetwork::GetPluginInformation() {
 }
 
 ModelDataDefinition* AgentNetwork::LoadInstance(Model* model, PersistenceRecord* fields) {
+	// Agents load only after their behaviors. Until then, the loader tries this network again.
+	for (unsigned int i = 0; i < fields->loadField("graphNodesSize", 0u); i++) {
+		const std::string behavior = fields->loadField("graphNode" + Util::StrIndex(i) + ".behavior", std::string(""));
+		if (!behavior.empty() && AgentNode::FindBehavior(model, behavior) == nullptr) {
+			return nullptr;
+		}
+	}
 	AgentNetwork* network = new AgentNetwork(model);
 	network->_loadInstance(fields);
 	return network;
@@ -92,6 +100,25 @@ unsigned int AgentNetwork::getReplicationFailures() const {
 
 unsigned int AgentNetwork::getTotalFailures() const {
 	return _totalFailures;
+}
+
+bool AgentNetwork::_loadInstance(PersistenceRecord* fields) {
+	bool res = DirectedGraphNetwork::_loadInstance(fields);
+	if (res) {
+		_failureLimit = fields->loadField("failureLimit", 0u);
+		_failureLimitPerReplication = fields->loadField("failureLimitPerReplication", 1u) != 0;
+		setEnvironment(dynamic_cast<AgentEnvironment*>(LoadNested(_parentModel, fields, "environment.")));
+	}
+	return res;
+}
+
+void AgentNetwork::_saveInstance(PersistenceRecord* fields, bool saveDefaultValues) {
+	DirectedGraphNetwork::_saveInstance(fields, saveDefaultValues);
+	fields->saveField("failureLimit", _failureLimit, 0u, saveDefaultValues);
+	fields->saveField("failureLimitPerReplication", _failureLimitPerReplication ? 1u : 0u, 1u, saveDefaultValues);
+	if (_environment != nullptr) {
+		SaveNested(fields, "environment.", _environment);
+	}
 }
 
 bool AgentNetwork::_check(std::string& errorMessage) {

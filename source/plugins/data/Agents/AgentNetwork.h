@@ -48,6 +48,8 @@ public:
 	unsigned int getTotalFailures() const;
 
 protected:
+	virtual bool _loadInstance(PersistenceRecord* fields) override;
+	virtual void _saveInstance(PersistenceRecord* fields, bool saveDefaultValues) override;
 	virtual bool _check(std::string& errorMessage) override;
 	virtual void _initBetweenReplications() override;
 	virtual void _createInternalStatisticReporters() override;

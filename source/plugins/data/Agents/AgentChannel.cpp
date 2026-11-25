@@ -4,12 +4,34 @@
 #include "kernel/simulator/model/Model.h"
 
 #include <algorithm>
+#include <sstream>
 
 #ifdef PLUGINCONNECT_DYNAMIC
 extern "C" StaticGetPluginInformation GetPluginInformation() {
 	return &AgentChannel::GetPluginInformation;
 }
 #endif
+
+namespace {
+// Message types are written separated by spaces, and read separated by spaces or commas.
+std::string join(const std::vector<std::string>& types) {
+	std::string text;
+	for (const std::string& type : types) {
+		text += (text.empty() ? "" : " ") + type;
+	}
+	return text;
+}
+
+std::vector<std::string> split(std::string text) {
+	std::replace(text.begin(), text.end(), ',', ' ');
+	std::istringstream stream(text);
+	std::vector<std::string> types;
+	for (std::string type; stream >> type;) {
+		types.push_back(type);
+	}
+	return types;
+}
+}
 
 AgentChannel::AgentChannel(Model* model, std::string name)
 	: GraphEdge(model, name, Util::TypeOf<AgentChannel>()) {
@@ -49,4 +71,17 @@ const std::vector<std::string>& AgentChannel::acceptedMessageTypes() const {
 
 bool AgentChannel::accepts(const std::string& type) const {
 	return std::find(_acceptedMessageTypes.begin(), _acceptedMessageTypes.end(), type) != _acceptedMessageTypes.end();
+}
+
+bool AgentChannel::_loadInstance(PersistenceRecord* fields) {
+	bool res = GraphEdge::_loadInstance(fields);
+	if (res) {
+		_acceptedMessageTypes = split(fields->loadField("acceptedMessageTypes", std::string("")));
+	}
+	return res;
+}
+
+void AgentChannel::_saveInstance(PersistenceRecord* fields, bool saveDefaultValues) {
+	GraphEdge::_saveInstance(fields, saveDefaultValues);
+	fields->saveField("acceptedMessageTypes", join(_acceptedMessageTypes), std::string(""), saveDefaultValues);
 }
