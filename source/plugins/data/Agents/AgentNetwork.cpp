@@ -69,6 +69,50 @@ unsigned int AgentNetwork::getRound() const {
 	return _round;
 }
 
+bool AgentNetwork::_check(std::string& errorMessage) {
+	bool resultAll = DirectedGraphNetwork::_check(errorMessage);
+	for (GraphEdge* edge : getEdges()) {
+		auto* channel = static_cast<AgentChannel*>(edge);
+		AgentBehavior* source = static_cast<AgentNode*>(channel->getSource())->getBehavior();
+		AgentBehavior* destination = static_cast<AgentNode*>(channel->getDestination())->getBehavior();
+		bool common = false;
+		if (source != nullptr && destination != nullptr) {
+			for (const std::string& type : source->producedMessageTypes()) {
+				common |= channel->accepts(type) && contains(destination->acceptedMessageTypes(), type);
+			}
+		}
+		if (!common) {
+			errorMessage += "AgentChannel \"" + channel->getName() + "\" links agents with no message type in common. ";
+			resultAll = false;
+		}
+	}
+	for (AgentNode* agent : _agentsByKey()) {
+		AgentBehavior* behavior = agent->getBehavior();
+		if (behavior == nullptr || agent->getWorldModel() == nullptr) {
+			errorMessage += "Agent \"" + agent->getName() + "\" has no behavior or no world model. ";
+			resultAll = false;
+			continue;
+		}
+		if (agent->getWorldModel()->getClassname() != behavior->worldModelType()) {
+			errorMessage += "Agent \"" + agent->getName() + "\" has a world model of type " + agent->getWorldModel()->getClassname()
+					+ ", but its behavior requires " + behavior->worldModelType() + ". ";
+			resultAll = false;
+		}
+		for (const std::string& type : behavior->producedMessageTypes()) {
+			bool accepted = _environment != nullptr && contains(_environment->acceptedMessageTypes(), type);
+			for (GraphEdge* edge : getOutgoingEdges(agent)) {
+				accepted |= static_cast<AgentChannel*>(edge)->accepts(type);
+			}
+			if (!accepted) {
+				errorMessage += "Agent \"" + agent->getName() + "\" produces message type " + type
+						+ ", which neither the environment nor its channels accept. ";
+				resultAll = false;
+			}
+		}
+	}
+	return resultAll;
+}
+
 void AgentNetwork::_initBetweenReplications() {
 	DirectedGraphNetwork::_initBetweenReplications();
 	_round = 0;

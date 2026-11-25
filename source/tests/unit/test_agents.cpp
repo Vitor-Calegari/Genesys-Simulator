@@ -28,7 +28,7 @@ public:
 
 class TestWorldModel : public AgentWorldModel {
 public:
-	explicit TestWorldModel(Model* model) : AgentWorldModel(model, "TestWorldModel") {}
+	explicit TestWorldModel(Model* model, std::string type = "TestWorldModel") : AgentWorldModel(model, type) {}
 	void reset() override { value = initial; }
 	std::string show() override { return std::to_string(value); }
 	int initial = 0;
@@ -248,4 +248,30 @@ TEST_F(AgentsTest, EnvironmentReceivesMessagesAlwaysInTheSameOrder) {
 	TestEnvironment* shared = environment();
 	simulate(1);
 	EXPECT_EQ(texts(shared->received), (std::vector<std::string>{"A", "B"}));
+}
+
+TEST_F(AgentsTest, ModelCheckRejectsTheThreeCases) {
+	agents({"A", "B"}, [](const AgentPerception&, const TestWorldModel*, TestDecision*) {});
+	channel("A", "B");
+	channel("B", "A");
+	std::string error;
+	EXPECT_TRUE(ModelDataDefinition::Check(network, error)) << error;
+
+	auto* ab = static_cast<AgentChannel*>(network->findEdgeByName("AB"));
+	ab->setAcceptedMessageTypes({"Other"});
+	error.clear();
+	EXPECT_FALSE(ModelDataDefinition::Check(network, error));
+	EXPECT_NE(error.find("AgentChannel \"AB\" links agents with no message type in common"), std::string::npos);
+	ab->setAcceptedMessageTypes({"TestMessage"});
+
+	network->removeEdge(network->findEdgeByName("BA"));
+	error.clear();
+	EXPECT_FALSE(ModelDataDefinition::Check(network, error));
+	EXPECT_NE(error.find("Agent \"B\" produces message type TestMessage"), std::string::npos);
+	channel("B", "A");
+
+	agent("A")->setWorldModel(new TestWorldModel(model, "OtherWorldModel"));
+	error.clear();
+	EXPECT_FALSE(ModelDataDefinition::Check(network, error));
+	EXPECT_NE(error.find("Agent \"A\" has a world model of type OtherWorldModel"), std::string::npos);
 }

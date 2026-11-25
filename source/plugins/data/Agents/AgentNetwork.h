@@ -38,6 +38,7 @@ public:
 	unsigned int getRound() const;
 
 protected:
+	virtual bool _check(std::string& errorMessage) override;
 	virtual void _initBetweenReplications() override;
 	virtual NetworkActivationResult _activate(const NetworkActivationFrame& frame) override;
 
