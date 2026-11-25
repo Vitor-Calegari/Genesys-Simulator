@@ -780,3 +780,32 @@ target_link_libraries(genesys_diffusion_ascii_demo
         genesys_kernel_util
         genesys_plugins_data
 )
+
+# Agent-based modeling: AgentNetwork rounds, model check, failure policy and persistence.
+add_executable(genesys_test_agents
+    unit/test_agents.cpp
+)
+
+target_include_directories(genesys_test_agents
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/source
+)
+
+target_link_libraries(genesys_test_agents
+    PRIVATE
+        GTest::gtest_main
+        "$<LINK_GROUP:RESCAN,genesys_kernel_util,genesys_kernel_statistics,genesys_parser,genesys_plugins_data,genesys_plugins_components_minimal,genesys_kernel_simulator_support,genesys_kernel_simulator_runtime>"
+)
+
+target_compile_features(genesys_test_agents PRIVATE cxx_std_23)
+
+set_property(TARGET genesys_test_agents PROPERTY FOLDER tests/unit)
+
+gtest_discover_tests(genesys_test_agents
+    PROPERTIES
+        LABELS "unit;abm"
+)
+
+if(TARGET genesys_kernel_unit_tests)
+    add_dependencies(genesys_kernel_unit_tests genesys_test_agents)
+endif()

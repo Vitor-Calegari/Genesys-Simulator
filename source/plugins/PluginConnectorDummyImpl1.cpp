@@ -119,6 +119,9 @@
 #include "plugins/data/ModalModel/CPNTransition.h"
 #include "plugins/data/ModalModel/CPNArc.h"
 #include "plugins/data/ModalModel/ColoredPetriNetNetwork.h"
+#include "plugins/data/Agents/AgentNode.h"
+#include "plugins/data/Agents/AgentChannel.h"
+#include "plugins/data/Agents/AgentNetwork.h"
 #include "plugins/data/DiscreteProcessing/Failure.h"
 #include "plugins/data/InputOutput/File.h"
 #include "data/Logic/Formula.h"
@@ -212,6 +215,9 @@ List<std::string>* PluginConnectorDummyImpl1::find() {
     filenames->insert("cpntransition.so");
     filenames->insert("cpnarc.so");
     filenames->insert("coloredpetrinetnetwork.so");
+    filenames->insert("agentnode.so");
+    filenames->insert("agentchannel.so");
+    filenames->insert("agentnetwork.so");
     filenames->insert("formula.so");
     filenames->insert("groprogram.so");
     filenames->insert("bacteriasignalgrid.so");
@@ -411,6 +417,12 @@ Plugin* PluginConnectorDummyImpl1::connect(const std::string dynamicLibraryFilen
         GetInfo = &CPNArc::GetPluginInformation;
     else if (fn == "coloredpetrinetnetwork.so")
         GetInfo = &ColoredPetriNetNetwork::GetPluginInformation;
+    else if (fn == "agentnode.so")
+        GetInfo = &AgentNode::GetPluginInformation;
+    else if (fn == "agentchannel.so")
+        GetInfo = &AgentChannel::GetPluginInformation;
+    else if (fn == "agentnetwork.so")
+        GetInfo = &AgentNetwork::GetPluginInformation;
     else if (fn == "formula.so")
         GetInfo = &Formula::GetPluginInformation;
     else if (fn == "groprogram.so")
