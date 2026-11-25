@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "kernel/simulator/Simulator.h"
+#include "kernel/simulator/essentialPlugins/Counter.h"
 #include "kernel/simulator/essentialPlugins/EntityType.h"
 #include "kernel/simulator/model/Model.h"
 #include "plugins/components/Logic/Create.h"
@@ -13,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -221,6 +223,50 @@ TEST_F(AgentsTest, TwoReplicationsStartFromTheSameState) {
 	EXPECT_TRUE(perceived["B"][2].environment.empty());
 	EXPECT_EQ(perceived["B"][3].messages.size(), perceived["B"][1].messages.size());
 	EXPECT_EQ(perceived["B"][3].environment.size(), perceived["B"][1].environment.size());
+}
+
+TEST_F(AgentsTest, FailureKeepsWorldModelAndMessagesAndSimulationContinues) {
+	agents({"A", "B"}, [&](const AgentPerception& perception, const TestWorldModel* world, TestDecision* decision) {
+		decision->value = world->value + 1;
+		if (perception.agent->getName() == "A" && network->getRound() == 1) {
+			decision->messages.push_back(message(perception.agent, agent("B"), "hello"));
+		}
+		if (perception.agent->getName() == "B" && network->getRound() == 2) {
+			throw std::runtime_error("provider unavailable");
+		}
+	});
+	channel("A", "B");
+	channel("B", "A");
+	simulate(3);
+	EXPECT_EQ(network->getRound(), 3u);
+	EXPECT_EQ(network->getReplicationFailures(), 1u);
+	EXPECT_EQ(world("A")->value, 3);
+	EXPECT_EQ(world("B")->value, 2);
+	EXPECT_EQ(texts(perceived["B"][1].messages), (std::vector<std::string>{"hello"}));
+	EXPECT_EQ(texts(perceived["B"][2].messages), (std::vector<std::string>{"hello"}));
+}
+
+TEST_F(AgentsTest, FailureLimitCancelsTheRoundAndStopsTheSimulation) {
+	// B fails in the second round of each replication, and the limit counts failures over all replications.
+	agents({"A", "B"}, [&](const AgentPerception& perception, const TestWorldModel* world, TestDecision* decision) {
+		decision->value = world->value + 1;
+		if (perception.agent->getName() == "B" && network->getRound() == 2) {
+			throw std::runtime_error("invalid response");
+		}
+	});
+	channel("A", "B");
+	channel("B", "A");
+	network->setFailureLimit(2);
+	network->setFailureLimitPerReplication(false);
+	simulate(3, 2);
+	EXPECT_EQ(perceived["A"].size(), 5u);
+	EXPECT_EQ(world("A")->value, 1);
+	EXPECT_EQ(network->getTotalFailures(), 2u);
+	auto counter = [&](const std::string& name) {
+		return static_cast<Counter*>(model->getDataManager()->getDataDefinition(Util::TypeOf<Counter>(), name))->getCountValue();
+	};
+	EXPECT_EQ(counter("Network.Failures"), 1.0);
+	EXPECT_EQ(counter("Network.TotalFailures"), 2.0);
 }
 
 TEST_F(AgentsTest, MessageWithoutAcceptingChannelOrEnvironmentFailsTheDecision) {

@@ -1,6 +1,7 @@
 #include "AgentNetwork.h"
 
 #include "kernel/simulator/PluginInformation.h"
+#include "kernel/simulator/essentialPlugins/Counter.h"
 #include "kernel/simulator/model/Model.h"
 
 #include <algorithm>
@@ -69,6 +70,30 @@ unsigned int AgentNetwork::getRound() const {
 	return _round;
 }
 
+void AgentNetwork::setFailureLimit(unsigned int limit) {
+	_failureLimit = limit;
+}
+
+unsigned int AgentNetwork::getFailureLimit() const {
+	return _failureLimit;
+}
+
+void AgentNetwork::setFailureLimitPerReplication(bool perReplication) {
+	_failureLimitPerReplication = perReplication;
+}
+
+bool AgentNetwork::isFailureLimitPerReplication() const {
+	return _failureLimitPerReplication;
+}
+
+unsigned int AgentNetwork::getReplicationFailures() const {
+	return _replicationFailures;
+}
+
+unsigned int AgentNetwork::getTotalFailures() const {
+	return _totalFailures;
+}
+
 bool AgentNetwork::_check(std::string& errorMessage) {
 	bool resultAll = DirectedGraphNetwork::_check(errorMessage);
 	for (GraphEdge* edge : getEdges()) {
@@ -116,12 +141,33 @@ bool AgentNetwork::_check(std::string& errorMessage) {
 void AgentNetwork::_initBetweenReplications() {
 	DirectedGraphNetwork::_initBetweenReplications();
 	_round = 0;
+	_replicationFailures = 0;
+	if (_parentModel->getSimulation()->getCurrentReplicationNumber() == 1) {
+		_totalFailures = 0;
+	}
 	_broker.clear();
 	for (GraphNode* node : getNodes()) {
 		static_cast<AgentNode*>(node)->getWorldModel()->reset();
 	}
 	if (_environment != nullptr) {
 		ModelDataDefinition::InitBetweenReplications(_environment);
+	}
+}
+
+void AgentNetwork::_createInternalStatisticReporters() {
+	DirectedGraphNetwork::_createInternalStatisticReporters();
+	if (_reportStatistics) {
+		if (_failuresCounter == nullptr) {
+			_failuresCounter = new Counter(_parentModel, getName() + ".Failures", this);
+			_totalFailuresCounter = new Counter(_parentModel, getName() + ".TotalFailures", this);
+		}
+		_mandatoryNonEditableDataDefinitionInsert("Failures", _failuresCounter);
+		_mandatoryNonEditableDataDefinitionInsert("TotalFailures", _totalFailuresCounter);
+	} else {
+		_mandatoryNonEditableDataDefinitionRemove("Failures");
+		_mandatoryNonEditableDataDefinitionRemove("TotalFailures");
+		_failuresCounter = nullptr;
+		_totalFailuresCounter = nullptr;
 	}
 }
 
@@ -154,6 +200,25 @@ NetworkActivationResult AgentNetwork::_activate(const NetworkActivationFrame& /*
 		} catch (const std::exception& e) {
 			failures[agent] = e.what();
 		}
+	}
+
+	// Register the failures. When they reach the limit, the round is cancelled and the simulation stops.
+	_replicationFailures += failures.size();
+	_totalFailures += failures.size();
+	if (_failuresCounter != nullptr) {
+		// GenESyS clears counters at each replication, so the total is written again every round.
+		_failuresCounter->incCountValue(failures.size());
+		_totalFailuresCounter->clear();
+		_totalFailuresCounter->incCountValue(_totalFailures);
+	}
+	if (_failureLimit > 0 && (_failureLimitPerReplication ? _replicationFailures : _totalFailures) >= _failureLimit) {
+		for (const auto& [agent, failure] : failures) {
+			_traceRound(agent, nullptr, failure);
+		}
+		traceSimulation(this, TraceManager::Level::L5_event, "AgentNetwork \"" + getName() + "\" round=" + std::to_string(_round)
+				+ " cancelled: failure limit " + std::to_string(_failureLimit) + " reached");
+		_parentModel->getSimulation()->stop();
+		return NetworkActivationResult(getNumOutputPorts());
 	}
 
 	// Apply the valid decisions. An agent whose decision failed receives its messages again.

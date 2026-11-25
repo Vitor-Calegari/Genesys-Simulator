@@ -12,6 +12,8 @@
 #include <string>
 #include <vector>
 
+class Counter;
+
 /*!
  * \brief Network of agents activated by a ModalModel: each activation runs one synchronous round.
  *
@@ -36,10 +38,19 @@ public:
 	void setEnvironment(AgentEnvironment* environment);
 	AgentEnvironment* getEnvironment() const;
 	unsigned int getRound() const;
+	/*! \brief Number of failed decisions that stops the simulation. Zero, the default, never stops it. */
+	void setFailureLimit(unsigned int limit);
+	unsigned int getFailureLimit() const;
+	/*! \brief Counts failures towards the limit per replication, the default, or over all replications. */
+	void setFailureLimitPerReplication(bool perReplication);
+	bool isFailureLimitPerReplication() const;
+	unsigned int getReplicationFailures() const;
+	unsigned int getTotalFailures() const;
 
 protected:
 	virtual bool _check(std::string& errorMessage) override;
 	virtual void _initBetweenReplications() override;
+	virtual void _createInternalStatisticReporters() override;
 	virtual NetworkActivationResult _activate(const NetworkActivationFrame& frame) override;
 
 private:
@@ -52,6 +63,12 @@ private:
 	AgentEnvironment* _environment = nullptr;
 	MessageBroker _broker;
 	unsigned int _round = 0;
+	unsigned int _failureLimit = 0;
+	bool _failureLimitPerReplication = true;
+	unsigned int _replicationFailures = 0;
+	unsigned int _totalFailures = 0;
+	Counter* _failuresCounter = nullptr;
+	Counter* _totalFailuresCounter = nullptr;
 };
 
 #endif /* AGENTNETWORK_H */
