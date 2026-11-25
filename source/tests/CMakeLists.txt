@@ -803,7 +803,7 @@ set_property(TARGET genesys_test_agents PROPERTY FOLDER tests/unit)
 
 gtest_discover_tests(genesys_test_agents
     PROPERTIES
-        LABELS "unit;abm"
+        LABELS "unit\;abm"
 )
 
 if(TARGET genesys_kernel_unit_tests)
