@@ -36,6 +36,12 @@ std::vector<std::string> split(std::string text) {
 AgentChannel::AgentChannel(Model* model, std::string name)
 	: GraphEdge(model, name, Util::TypeOf<AgentChannel>()) {
 	setDirected(true);
+	auto* types = new SimulationControlString(
+		[this]() { return join(_acceptedMessageTypes); },
+		[this](std::string text) { _acceptedMessageTypes = split(text); },
+		Util::TypeOf<AgentChannel>(), getName(), "AcceptedMessageTypes");
+	_parentModel->getControls()->insert(types);
+	_addSimulationControl(types);
 }
 
 PluginInformation* AgentChannel::GetPluginInformation() {

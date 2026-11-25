@@ -343,3 +343,34 @@ TEST_F(AgentsTest, SaveKeepsEachWorldModelInsideItsAgent) {
 	EXPECT_EQ(text.find("TestWorldModel \""), std::string::npos);
 	EXPECT_EQ(text.find("TestEnvironment \""), std::string::npos);
 }
+
+TEST_F(AgentsTest, PropertiesAreEditableInThePropertyEditor) {
+	agents({"A", "B"}, [](const AgentPerception&, const TestWorldModel*, TestDecision*) {});
+	channel("A", "B");
+	environment();
+	auto control = [](ModelDataDefinition* element, const std::string& name) -> SimulationControl* {
+		for (SimulationControl* control : *element->getSimulationControls()->list()) {
+			if (control->getName() == name) return control;
+		}
+		return nullptr;
+	};
+	auto* other = new TestBehavior(model, [](const AgentPerception&, const TestWorldModel*, TestDecision*) {});
+	control(agent("A"), "Behavior")->setValue(other->getName());
+	EXPECT_EQ(agent("A")->getBehavior(), other);
+	EXPECT_EQ(control(agent("A"), "Behavior")->getValue(), other->getName());
+	SimulationControl* worldModel = control(agent("A"), "WorldModel");
+	EXPECT_TRUE(worldModel->isInlineObjectProperty());
+	EXPECT_TRUE(worldModel->isReadOnly());
+	EXPECT_EQ(worldModel->getChildSimulationControls(), world("A")->getSimulationControls());
+	EXPECT_EQ(control(network, "Environment")->getChildSimulationControls(), network->getEnvironment()->getSimulationControls());
+
+	auto* ab = static_cast<AgentChannel*>(network->findEdgeByName("AB"));
+	control(ab, "AcceptedMessageTypes")->setValue("TestMessage, OtherMessage");
+	EXPECT_EQ(ab->acceptedMessageTypes(), (std::vector<std::string>{"TestMessage", "OtherMessage"}));
+	EXPECT_EQ(control(ab, "AcceptedMessageTypes")->getValue(), "TestMessage OtherMessage");
+
+	control(network, "FailureLimit")->setValue("2");
+	control(network, "FailureLimitPerReplication")->setValue("false");
+	EXPECT_EQ(network->getFailureLimit(), 2u);
+	EXPECT_FALSE(network->isFailureLimitPerReplication());
+}

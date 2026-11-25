@@ -12,6 +12,18 @@ extern "C" StaticGetPluginInformation GetPluginInformation() {
 
 AgentNode::AgentNode(Model* model, std::string name)
 	: GraphNode(model, name, Util::TypeOf<AgentNode>()) {
+	auto* behavior = new SimulationControlString(
+		[this]() { return _behavior != nullptr ? _behavior->getName() : std::string(""); },
+		[this](std::string name) { setBehavior(FindBehavior(_parentModel, name)); },
+		Util::TypeOf<AgentNode>(), getName(), "Behavior");
+	_parentModel->getControls()->insert(behavior);
+	_addSimulationControl(behavior);
+	// The world model belongs to the agent, so its properties are shown inline and it cannot be replaced here.
+	auto* worldModel = new SimulationControlGenericClassNotDC<ModelDataDefinition*, Model*, ModelDataDefinition>(
+		_parentModel, [this]() -> ModelDataDefinition* { return _worldModel; }, nullptr,
+		Util::TypeOf<AgentNode>(), getName(), "WorldModel");
+	_parentModel->getControls()->insert(worldModel);
+	_addSimulationControl(worldModel);
 }
 
 AgentNode::~AgentNode() {

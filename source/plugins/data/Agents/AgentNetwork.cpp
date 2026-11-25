@@ -6,6 +6,7 @@
 #include "kernel/simulator/model/Model.h"
 
 #include <algorithm>
+#include <functional>
 #include <stdexcept>
 
 #ifdef PLUGINCONNECT_DYNAMIC
@@ -24,6 +25,20 @@ AgentNetwork::AgentNetwork(Model* model, std::string name)
 	: DirectedGraphNetwork(model, name, Util::TypeOf<AgentNetwork>()) {
 	addInputPort("tick");
 	addOutputPort("completed");
+	// The environment belongs to the network, so its properties are shown inline and it cannot be replaced here.
+	auto* environment = new SimulationControlGenericClassNotDC<ModelDataDefinition*, Model*, ModelDataDefinition>(
+		_parentModel, [this]() -> ModelDataDefinition* { return _environment; }, nullptr,
+		Util::TypeOf<AgentNetwork>(), getName(), "Environment");
+	auto* limit = new SimulationControlUInt(
+		std::bind(&AgentNetwork::getFailureLimit, this), std::bind(&AgentNetwork::setFailureLimit, this, std::placeholders::_1),
+		Util::TypeOf<AgentNetwork>(), getName(), "FailureLimit", "Failed decisions that stop the simulation. Zero never stops it.");
+	auto* perReplication = new SimulationControlBool(
+		std::bind(&AgentNetwork::isFailureLimitPerReplication, this), std::bind(&AgentNetwork::setFailureLimitPerReplication, this, std::placeholders::_1),
+		Util::TypeOf<AgentNetwork>(), getName(), "FailureLimitPerReplication", "Counts failures per replication or over all replications.");
+	for (SimulationControl* control : std::vector<SimulationControl*>{environment, limit, perReplication}) {
+		_parentModel->getControls()->insert(control);
+		_addSimulationControl(control);
+	}
 }
 
 AgentNetwork::~AgentNetwork() {
