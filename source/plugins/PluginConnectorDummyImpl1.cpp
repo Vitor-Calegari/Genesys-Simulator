@@ -122,6 +122,8 @@
 #include "plugins/data/Agents/AgentNode.h"
 #include "plugins/data/Agents/AgentChannel.h"
 #include "plugins/data/Agents/AgentNetwork.h"
+#include "plugins/data/Agents/RuleBehavior.h"
+#include "plugins/data/Agents/RuleWorldModel.h"
 #include "plugins/data/DiscreteProcessing/Failure.h"
 #include "plugins/data/InputOutput/File.h"
 #include "data/Logic/Formula.h"
@@ -218,6 +220,8 @@ List<std::string>* PluginConnectorDummyImpl1::find() {
     filenames->insert("agentnode.so");
     filenames->insert("agentchannel.so");
     filenames->insert("agentnetwork.so");
+    filenames->insert("rulebehavior.so");
+    filenames->insert("ruleworldmodel.so");
     filenames->insert("formula.so");
     filenames->insert("groprogram.so");
     filenames->insert("bacteriasignalgrid.so");
@@ -423,6 +427,10 @@ Plugin* PluginConnectorDummyImpl1::connect(const std::string dynamicLibraryFilen
         GetInfo = &AgentChannel::GetPluginInformation;
     else if (fn == "agentnetwork.so")
         GetInfo = &AgentNetwork::GetPluginInformation;
+    else if (fn == "rulebehavior.so")
+        GetInfo = &RuleBehavior::GetPluginInformation;
+    else if (fn == "ruleworldmodel.so")
+        GetInfo = &RuleWorldModel::GetPluginInformation;
     else if (fn == "formula.so")
         GetInfo = &Formula::GetPluginInformation;
     else if (fn == "groprogram.so")
