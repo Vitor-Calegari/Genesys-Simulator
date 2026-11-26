@@ -11,6 +11,9 @@
 #include "plugins/components/ModalModel/ModalModel.h"
 #include "plugins/data/AI/AISupport.h"
 #include "plugins/data/Agents/AgentNetwork.h"
+#include "plugins/data/Agents/LLMBehavior.h"
+#include "plugins/data/Agents/LLMWorldModel.h"
+#include "plugins/data/Agents/PublicConsultationEnvironment.h"
 #include "plugins/data/Agents/RuleBehavior.h"
 #include "plugins/data/Agents/RuleWorldModel.h"
 #include "plugins/data/Logic/Variable.h"
@@ -92,6 +95,32 @@ std::vector<std::string> texts(const std::vector<std::shared_ptr<AgentMessage>>&
 	return result;
 }
 
+// Responses of the controlled mode of the public consultation, one decision per agent and round.
+const std::string CONTROLLED_MODE =
+	"Ministerio: {\"action\": \"publish\", \"text\": \"The law protects the health of workers.\"}\n"
+	"Ministerio: {\"action\": \"none\"}\n"
+	"Ministerio: {\"action\": \"send\", \"to\": \"Associacao\", \"text\": \"We propose a tax compensation.\"}\n"
+	"Ministerio: {\"action\": \"none\"}\n"
+	"Sindicato: {\"action\": \"none\"}\n"
+	"Sindicato: {\"action\": \"publish\", \"text\": \"We support the law without salary cuts.\"}\n"
+	"Sindicato: this is not JSON\n"
+	"Sindicato: {\"action\": \"none\"}\n"
+	"Associacao: {\"action\": \"none\"}\n"
+	"Associacao: {\"action\": \"send\", \"to\": \"Ministerio\", \"text\": \"We ask for a compensation.\"}\n"
+	"Associacao: {\"action\": \"none\"}\n"
+	"Associacao: {\"action\": \"publish\", \"text\": \"We support the law with the compensation.\"}\n";
+
+// What an LLM agent perceived in each round its decision was applied, from its memory.
+std::vector<std::string> remembered(const std::string& memory) {
+	std::vector<std::string> rounds;
+	for (std::size_t start = memory.find("Perceived:\n"); start != std::string::npos;) {
+		const std::size_t next = memory.find("Perceived:\n", start + 1);
+		rounds.push_back(memory.substr(start, next - start));
+		start = next;
+	}
+	return rounds;
+}
+
 // A model with one AgentNetwork, activated by Create -> ModalModel -> Dispose.
 class AgentModel {
 public:
@@ -132,6 +161,34 @@ public:
 		return behavior;
 	}
 	RuleWorldModel* ruleWorld(const std::string& name) { return static_cast<RuleWorldModel*>(agent(name)->getWorldModel()); }
+	// The public consultation: three institutions with channels in both directions between the ministry and each of the others.
+	LLMBehavior* consultation(const std::string& responses) {
+		auto* support = new AISupport(model, "LLM");
+		support->setProvider("Simulated");
+		support->setSimulatedResponses(responses);
+		auto* behavior = new LLMBehavior(model, "Institutions");
+		behavior->setAISupport(support);
+		for (const std::string name : {"Associacao", "Ministerio", "Sindicato"}) {
+			auto* agent = new AgentNode(model, name);
+			agent->setBehavior(behavior);
+			auto* world = new LLMWorldModel(model);
+			world->setPersona("Persona of " + name);
+			agent->setWorldModel(world);
+			network->addNode(agent);
+		}
+		for (const std::string other : {"Associacao", "Sindicato"}) {
+			channel("Ministerio", other, "TextMessage");
+			channel(other, "Ministerio", "TextMessage");
+		}
+		auto* environment = new PublicConsultationEnvironment(model);
+		environment->setLawText("The working week has 40 hours.");
+		network->setEnvironment(environment);
+		return behavior;
+	}
+	LLMWorldModel* llmWorld(const std::string& name) { return static_cast<LLMWorldModel*>(agent(name)->getWorldModel()); }
+	StatisticsCollector* collector(const std::string& name) {
+		return static_cast<StatisticsCollector*>(model->getDataManager()->getDataDefinition(Util::TypeOf<StatisticsCollector>(), name));
+	}
 	void channel(const std::string& source, const std::string& destination, const std::string& type = "TestMessage") {
 		auto* channel = new AgentChannel(model, source + destination);
 		channel->setSource(agent(source));
@@ -530,4 +587,110 @@ TEST_F(AgentsTest, SimulatedProviderGivesEachAgentItsNthResponseAndRestartsEachR
 	EXPECT_EQ(ask("B"), "{\"action\": \"none\"}");
 	ModelDataDefinition::InitBetweenReplications(support);
 	EXPECT_EQ(ask("A"), "a1");
+}
+
+TEST_F(AgentsTest, ControlledModeRunsTheFourRoundsOfThePublicConsultation) {
+	consultation(CONTROLLED_MODE);
+	simulate(4, 2);
+	// The second replication starts again and gives the same rounds.
+	const std::vector<std::string> ministerio = remembered(llmWorld("Ministerio")->getMemory());
+	const std::vector<std::string> sindicato = remembered(llmWorld("Sindicato")->getMemory());
+	const std::vector<std::string> associacao = remembered(llmWorld("Associacao")->getMemory());
+	ASSERT_EQ(ministerio.size(), 4u);
+	ASSERT_EQ(associacao.size(), 4u);
+	// A statement is perceived only in the next round.
+	EXPECT_NE(sindicato[0].find("Environment: The working week has 40 hours."), std::string::npos);
+	EXPECT_EQ(sindicato[0].find("Public message from Ministerio"), std::string::npos);
+	EXPECT_NE(sindicato[1].find("Public message from Ministerio: The law protects the health of workers."), std::string::npos);
+	EXPECT_NE(ministerio[2].find("Public message from Sindicato: We support the law without salary cuts."), std::string::npos);
+	// The private message of the association reaches the ministry in round 3, and its answer reaches the association in round 4.
+	EXPECT_EQ(ministerio[1].find("Private message from Associacao"), std::string::npos);
+	EXPECT_NE(ministerio[2].find("Private message from Associacao: We ask for a compensation."), std::string::npos);
+	EXPECT_EQ(associacao[2].find("Private message from Ministerio"), std::string::npos);
+	EXPECT_NE(associacao[3].find("Private message from Ministerio: We propose a tax compensation."), std::string::npos);
+	EXPECT_NE(associacao[3].find("Decided: publish: We support the law with the compensation."), std::string::npos);
+	// The invalid response of the union in round 3 is a failure, leaves its memory alone and does not stop the simulation.
+	ASSERT_EQ(sindicato.size(), 3u);
+	EXPECT_NE(sindicato[2].find("Decided: none"), std::string::npos);
+	EXPECT_EQ(counter("Network.Failures"), 1.0);
+	EXPECT_EQ(counter("Network.TotalFailures"), 2.0);
+	EXPECT_EQ(network->getRound(), 4u);
+	EXPECT_EQ(static_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getStatements().size(), 3u);
+}
+
+TEST_F(AgentsTest, LLMMemoryChangesOnlyInApplyEvenWhenTheAgentDoesNotAct) {
+	LLMBehavior* behavior = consultation("");
+	AgentPerception perception;
+	perception.agent = agent("Sindicato");
+	perception.environment = network->getEnvironment()->perceive(perception.agent);
+	std::unique_ptr<AgentDecision> decision = behavior->decide(perception, llmWorld("Sindicato"));
+	EXPECT_EQ(llmWorld("Sindicato")->getMemory(), "");
+	behavior->apply(decision.get(), llmWorld("Sindicato"));
+	EXPECT_EQ(llmWorld("Sindicato")->getMemory(), "Perceived:\nEnvironment: The working week has 40 hours.\nDecided: none\n");
+}
+
+TEST_F(AgentsTest, SaveAndLoadKeepPersonasLawTextAISupportAndSimulatedResponses) {
+	consultation(CONTROLLED_MODE);
+	flow(4);
+	const std::string filename = testing::TempDir() + "genesys_test_agents_llm.gen";
+	ASSERT_TRUE(model->save(filename));
+
+	Model* loaded = simulator.getModelManager()->newModel();
+	ASSERT_TRUE(loaded->load(filename));
+	std::remove(filename.c_str());
+	auto* network = dynamic_cast<AgentNetwork*>(loaded->getDataManager()->getDataDefinition(Util::TypeOf<AgentNetwork>(), "Network"));
+	ASSERT_NE(network, nullptr);
+	EXPECT_EQ(loaded->getDataManager()->getNumberOfDataDefinitions(Util::TypeOf<LLMWorldModel>()), 0u);
+	EXPECT_EQ(loaded->getDataManager()->getNumberOfDataDefinitions(Util::TypeOf<PublicConsultationEnvironment>()), 0u);
+	auto* ministerio = static_cast<AgentNode*>(network->findNodeByName("Ministerio"));
+	EXPECT_EQ(dynamic_cast<LLMWorldModel*>(ministerio->getWorldModel())->getPersona(), "Persona of Ministerio");
+	EXPECT_EQ(dynamic_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getLawText(), "The working week has 40 hours.");
+	AISupport* support = static_cast<LLMBehavior*>(ministerio->getBehavior())->getAISupport();
+	ASSERT_NE(support, nullptr);
+	EXPECT_EQ(support, loaded->getDataManager()->getDataDefinition(Util::TypeOf<AISupport>(), "LLM"));
+	EXPECT_EQ(support->getSimulatedResponses(), CONTROLLED_MODE);
+
+	ASSERT_TRUE(loaded->check());
+	loaded->getSimulation()->start();
+	EXPECT_EQ(network->getRound(), 4u);
+	EXPECT_EQ(network->getReplicationFailures(), 1u);
+	EXPECT_EQ(dynamic_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getStatements().size(), 3u);
+}
+
+TEST_F(AgentsTest, LLMCheckRejectsABehaviorWithoutAISupport) {
+	auto* behavior = new LLMBehavior(model, "Institutions");
+	std::string error;
+	EXPECT_FALSE(ModelDataDefinition::Check(behavior, error));
+	EXPECT_NE(error.find("LLMBehavior \"Institutions\" has no AISupport"), std::string::npos) << error;
+}
+
+TEST_F(AgentsTest, TokensAndLatencyGetOneValuePerValidDecision) {
+	consultation(CONTROLLED_MODE);
+	simulate(4);
+	// Twelve decisions, one of them failed.
+	EXPECT_EQ(collector("Institutions.Tokens")->getStatistics()->numElements(), 11u);
+	EXPECT_EQ(collector("Institutions.Latency")->getStatistics()->numElements(), 11u);
+	EXPECT_GT(collector("Institutions.Tokens")->getStatistics()->average(), 0.0);
+}
+
+TEST_F(AgentsTest, LLMPropertiesAreEditableInThePropertyEditor) {
+	consultation("");
+	auto control = [](ModelDataDefinition* element, const std::string& name) -> SimulationControl* {
+		for (SimulationControl* control : *element->getSimulationControls()->list()) {
+			if (control->getName() == name) return control;
+		}
+		return nullptr;
+	};
+	auto* behavior = static_cast<LLMBehavior*>(agent("Ministerio")->getBehavior());
+	auto* other = new AISupport(model, "Other");
+	control(behavior, "AISupport")->setValue("Other");
+	EXPECT_EQ(behavior->getAISupport(), other);
+	control(behavior, "PromptTemplate")->setValue("Answer in JSON.");
+	EXPECT_EQ(behavior->getPromptTemplate(), "Answer in JSON.");
+	control(llmWorld("Ministerio"), "Persona")->setValue("Defends the law.");
+	EXPECT_EQ(llmWorld("Ministerio")->getPersona(), "Defends the law.");
+	control(network->getEnvironment(), "LawText")->setValue("New text.");
+	EXPECT_EQ(static_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getLawText(), "New text.");
+	control(other, "SimulatedResponses")->setValue("A: {}");
+	EXPECT_EQ(other->getSimulatedResponses(), "A: {}");
 }
