@@ -124,6 +124,9 @@
 #include "plugins/data/Agents/AgentNetwork.h"
 #include "plugins/data/Agents/RuleBehavior.h"
 #include "plugins/data/Agents/RuleWorldModel.h"
+#include "plugins/data/Agents/LLMBehavior.h"
+#include "plugins/data/Agents/LLMWorldModel.h"
+#include "plugins/data/Agents/PublicConsultationEnvironment.h"
 #include "plugins/data/DiscreteProcessing/Failure.h"
 #include "plugins/data/InputOutput/File.h"
 #include "data/Logic/Formula.h"
@@ -222,6 +225,9 @@ List<std::string>* PluginConnectorDummyImpl1::find() {
     filenames->insert("agentnetwork.so");
     filenames->insert("rulebehavior.so");
     filenames->insert("ruleworldmodel.so");
+    filenames->insert("llmbehavior.so");
+    filenames->insert("llmworldmodel.so");
+    filenames->insert("publicconsultationenvironment.so");
     filenames->insert("formula.so");
     filenames->insert("groprogram.so");
     filenames->insert("bacteriasignalgrid.so");
@@ -431,6 +437,12 @@ Plugin* PluginConnectorDummyImpl1::connect(const std::string dynamicLibraryFilen
         GetInfo = &RuleBehavior::GetPluginInformation;
     else if (fn == "ruleworldmodel.so")
         GetInfo = &RuleWorldModel::GetPluginInformation;
+    else if (fn == "llmbehavior.so")
+        GetInfo = &LLMBehavior::GetPluginInformation;
+    else if (fn == "llmworldmodel.so")
+        GetInfo = &LLMWorldModel::GetPluginInformation;
+    else if (fn == "publicconsultationenvironment.so")
+        GetInfo = &PublicConsultationEnvironment::GetPluginInformation;
     else if (fn == "formula.so")
         GetInfo = &Formula::GetPluginInformation;
     else if (fn == "groprogram.so")
