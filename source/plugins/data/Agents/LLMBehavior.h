@@ -16,8 +16,9 @@ class StatisticsCollector;
  * agent, what it perceived and the agents it can send private messages to, followed by the
  * prompt template. The response is a JSON object whose "action" is "publish", with a "text"
  * sent to the environment, "send", with a "text" sent to the agent named in "to", or "none".
- * apply() keeps in the memory what the agent perceived and decided, and records the tokens
- * and the latency of the call.
+ * apply() keeps in the memory the private messages the agent received and what it decided,
+ * since the environment shows the rest again at each round, and records the tokens and the
+ * latency of the call.
  */
 class LLMBehavior : public AgentBehavior {
 public:

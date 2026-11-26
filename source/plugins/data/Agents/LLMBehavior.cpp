@@ -33,14 +33,12 @@ bool jsonString(const std::string& json, const std::string& key, std::string& va
 	return true;
 }
 
-std::string describe(const AgentPerception& perception) {
+// One line per message with its sender, as the agent reads it in the prompt.
+std::string lines(const std::vector<std::shared_ptr<AgentMessage>>& messages, const std::string& kind) {
 	std::string text;
-	for (const std::shared_ptr<AgentMessage>& message : perception.environment) {
-		text += (message->getSender() != nullptr ? "Public message from " + message->getSender()->getName() : std::string("Environment"))
+	for (const std::shared_ptr<AgentMessage>& message : messages) {
+		text += (message->getSender() != nullptr ? kind + " message from " + message->getSender()->getName() : std::string("Environment"))
 				+ ": " + message->show() + "\n";
-	}
-	for (const std::shared_ptr<AgentMessage>& message : perception.messages) {
-		text += "Private message from " + message->getSender()->getName() + ": " + message->show() + "\n";
 	}
 	return text;
 }
@@ -88,13 +86,13 @@ ModelDataDefinition* LLMBehavior::NewInstance(Model* model, std::string name) {
 std::unique_ptr<AgentDecision> LLMBehavior::decide(const AgentPerception& perception, const AgentWorldModel* worldModel) {
 	const auto* world = static_cast<const LLMWorldModel*>(worldModel);
 	auto decision = std::make_unique<LLMDecision>();
-	decision->perceived = describe(perception);
+	decision->received = lines(perception.messages, "Private");
 	std::string receivers;
 	for (AgentNode* neighbor : perception.neighbors) {
 		receivers += (receivers.empty() ? "" : ", ") + neighbor->getName();
 	}
 	const std::string prompt = "Agent: " + perception.agent->getName() + "\nPersona: " + world->getPersona()
-			+ "\nMemory:\n" + world->getMemory() + "Perceived now:\n" + decision->perceived
+			+ "\nMemory:\n" + world->getMemory() + "Perceived now:\n" + lines(perception.environment, "Public") + decision->received
 			+ "Agents you can send private messages to: " + receivers + "\n" + _promptTemplate;
 
 	// The memory is in the world model, so the conversation in the AISupport is cleared right after the call.
@@ -134,7 +132,7 @@ std::unique_ptr<AgentDecision> LLMBehavior::decide(const AgentPerception& percep
 
 void LLMBehavior::apply(AgentDecision* decision, AgentWorldModel* worldModel) {
 	auto* llmDecision = static_cast<LLMDecision*>(decision);
-	static_cast<LLMWorldModel*>(worldModel)->remember("Perceived:\n" + llmDecision->perceived + "Decided: " + llmDecision->response + "\n");
+	static_cast<LLMWorldModel*>(worldModel)->remember(llmDecision->received + "Decided: " + llmDecision->response + "\n");
 	if (_tokens != nullptr) {
 		_tokens->getStatistics()->getCollector()->addValue(llmDecision->tokens);
 		_latency->getStatistics()->getCollector()->addValue(llmDecision->latency);

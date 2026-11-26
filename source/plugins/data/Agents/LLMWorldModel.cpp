@@ -24,7 +24,7 @@ LLMWorldModel::LLMWorldModel(Model* model, std::string name)
 PluginInformation* LLMWorldModel::GetPluginInformation() {
 	PluginInformation* info = new PluginInformation(Util::TypeOf<LLMWorldModel>(), &LLMWorldModel::LoadInstance, &LLMWorldModel::NewInstance);
 	info->setCategory("Agents");
-	info->setDescriptionHelp("World model of an LLM agent, with its persona and the memory of what it perceived and decided.");
+	info->setDescriptionHelp("World model of an LLM agent, with its persona and the memory of the private messages it received and what it decided.");
 	return info;
 }
 

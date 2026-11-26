@@ -14,6 +14,7 @@
 #include "plugins/data/Agents/LLMBehavior.h"
 #include "plugins/data/Agents/LLMWorldModel.h"
 #include "plugins/data/Agents/PublicConsultationEnvironment.h"
+#include "plugins/data/Agents/TextMessage.h"
 #include "plugins/data/Agents/RuleBehavior.h"
 #include "plugins/data/Agents/RuleWorldModel.h"
 #include "plugins/data/Logic/Variable.h"
@@ -95,28 +96,30 @@ std::vector<std::string> texts(const std::vector<std::shared_ptr<AgentMessage>>&
 	return result;
 }
 
-// Responses of the controlled mode of the public consultation, one decision per agent and round.
+// Law and responses of the controlled mode of the public consultation, one decision per agent and round.
+const std::string LAW_TEXT = "Projeto de lei que reduz a jornada de trabalho de 44 para 40 horas semanais, sem redução de salário.";
 const std::string CONTROLLED_MODE =
-	"Ministerio: {\"action\": \"publish\", \"text\": \"The law protects the health of workers.\"}\n"
+	"Ministerio: {\"action\": \"publish\", \"text\": \"A redução da jornada protege a saúde dos trabalhadores e mantém os salários.\"}\n"
 	"Ministerio: {\"action\": \"none\"}\n"
-	"Ministerio: {\"action\": \"send\", \"to\": \"Associacao\", \"text\": \"We propose a tax compensation.\"}\n"
+	"Ministerio: {\"action\": \"send\", \"to\": \"Associacao\", \"text\": \"Propomos compensação fiscal às pequenas empresas durante a transição.\"}\n"
 	"Ministerio: {\"action\": \"none\"}\n"
 	"Sindicato: {\"action\": \"none\"}\n"
-	"Sindicato: {\"action\": \"publish\", \"text\": \"We support the law without salary cuts.\"}\n"
-	"Sindicato: this is not JSON\n"
+	"Sindicato: {\"action\": \"publish\", \"text\": \"Apoiamos a lei, desde que não haja redução de salário.\"}\n"
+	"Sindicato: Concordo com tudo.\n"
 	"Sindicato: {\"action\": \"none\"}\n"
 	"Associacao: {\"action\": \"none\"}\n"
-	"Associacao: {\"action\": \"send\", \"to\": \"Ministerio\", \"text\": \"We ask for a compensation.\"}\n"
+	"Associacao: {\"action\": \"send\", \"to\": \"Ministerio\", \"text\": \"Pedimos compensação para as pequenas empresas.\"}\n"
 	"Associacao: {\"action\": \"none\"}\n"
-	"Associacao: {\"action\": \"publish\", \"text\": \"We support the law with the compensation.\"}\n";
+	"Associacao: {\"action\": \"publish\", \"text\": \"Apoiamos a lei com a compensação proposta pelo ministério.\"}\n";
 
-// What an LLM agent perceived in each round its decision was applied, from its memory.
+// The memory of an LLM agent split by round, each part ending with the decision of that round.
 std::vector<std::string> remembered(const std::string& memory) {
 	std::vector<std::string> rounds;
-	for (std::size_t start = memory.find("Perceived:\n"); start != std::string::npos;) {
-		const std::size_t next = memory.find("Perceived:\n", start + 1);
-		rounds.push_back(memory.substr(start, next - start));
-		start = next;
+	std::size_t start = 0;
+	for (std::size_t decided = memory.find("Decided: "); decided != std::string::npos; decided = memory.find("Decided: ", start)) {
+		const std::size_t end = memory.find('\n', decided) + 1;
+		rounds.push_back(memory.substr(start, end - start));
+		start = end;
 	}
 	return rounds;
 }
@@ -181,7 +184,7 @@ public:
 			channel(other, "Ministerio", "TextMessage");
 		}
 		auto* environment = new PublicConsultationEnvironment(model);
-		environment->setLawText("The working week has 40 hours.");
+		environment->setLawText(LAW_TEXT);
 		network->setEnvironment(environment);
 		return behavior;
 	}
@@ -598,24 +601,25 @@ TEST_F(AgentsTest, ControlledModeRunsTheFourRoundsOfThePublicConsultation) {
 	const std::vector<std::string> associacao = remembered(llmWorld("Associacao")->getMemory());
 	ASSERT_EQ(ministerio.size(), 4u);
 	ASSERT_EQ(associacao.size(), 4u);
-	// A statement is perceived only in the next round.
-	EXPECT_NE(sindicato[0].find("Environment: The working week has 40 hours."), std::string::npos);
-	EXPECT_EQ(sindicato[0].find("Public message from Ministerio"), std::string::npos);
-	EXPECT_NE(sindicato[1].find("Public message from Ministerio: The law protects the health of workers."), std::string::npos);
-	EXPECT_NE(ministerio[2].find("Public message from Sindicato: We support the law without salary cuts."), std::string::npos);
+	// The statements were published in rounds 1, 2 and 4, and every agent perceives them with the law.
+	const std::vector<std::shared_ptr<AgentMessage>> perceived = network->getEnvironment()->perceive(agent("Sindicato"));
+	ASSERT_EQ(perceived.size(), 4u);
+	EXPECT_EQ(perceived[0]->show(), LAW_TEXT);
+	EXPECT_EQ(perceived[1]->getSender(), agent("Ministerio"));
+	EXPECT_EQ(perceived[2]->getSender(), agent("Sindicato"));
+	EXPECT_EQ(perceived[3]->getSender(), agent("Associacao"));
 	// The private message of the association reaches the ministry in round 3, and its answer reaches the association in round 4.
-	EXPECT_EQ(ministerio[1].find("Private message from Associacao"), std::string::npos);
-	EXPECT_NE(ministerio[2].find("Private message from Associacao: We ask for a compensation."), std::string::npos);
-	EXPECT_EQ(associacao[2].find("Private message from Ministerio"), std::string::npos);
-	EXPECT_NE(associacao[3].find("Private message from Ministerio: We propose a tax compensation."), std::string::npos);
-	EXPECT_NE(associacao[3].find("Decided: publish: We support the law with the compensation."), std::string::npos);
+	EXPECT_EQ(ministerio[1], "Decided: none\n");
+	EXPECT_EQ(ministerio[2], "Private message from Associacao: Pedimos compensação para as pequenas empresas.\n"
+			"Decided: send to Associacao: Propomos compensação fiscal às pequenas empresas durante a transição.\n");
+	EXPECT_EQ(associacao[2], "Decided: none\n");
+	EXPECT_EQ(associacao[3], "Private message from Ministerio: Propomos compensação fiscal às pequenas empresas durante a transição.\n"
+			"Decided: publish: Apoiamos a lei com a compensação proposta pelo ministério.\n");
 	// The invalid response of the union in round 3 is a failure, leaves its memory alone and does not stop the simulation.
-	ASSERT_EQ(sindicato.size(), 3u);
-	EXPECT_NE(sindicato[2].find("Decided: none"), std::string::npos);
+	EXPECT_EQ(sindicato, (std::vector<std::string>{"Decided: none\n", "Decided: publish: Apoiamos a lei, desde que não haja redução de salário.\n", "Decided: none\n"}));
 	EXPECT_EQ(counter("Network.Failures"), 1.0);
 	EXPECT_EQ(counter("Network.TotalFailures"), 2.0);
 	EXPECT_EQ(network->getRound(), 4u);
-	EXPECT_EQ(static_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getStatements().size(), 3u);
 }
 
 TEST_F(AgentsTest, LLMMemoryChangesOnlyInApplyEvenWhenTheAgentDoesNotAct) {
@@ -623,10 +627,12 @@ TEST_F(AgentsTest, LLMMemoryChangesOnlyInApplyEvenWhenTheAgentDoesNotAct) {
 	AgentPerception perception;
 	perception.agent = agent("Sindicato");
 	perception.environment = network->getEnvironment()->perceive(perception.agent);
+	perception.messages.push_back(std::make_shared<TextMessage>(agent("Ministerio"), perception.agent, "Podemos conversar?"));
 	std::unique_ptr<AgentDecision> decision = behavior->decide(perception, llmWorld("Sindicato"));
 	EXPECT_EQ(llmWorld("Sindicato")->getMemory(), "");
 	behavior->apply(decision.get(), llmWorld("Sindicato"));
-	EXPECT_EQ(llmWorld("Sindicato")->getMemory(), "Perceived:\nEnvironment: The working week has 40 hours.\nDecided: none\n");
+	// The memory keeps the private messages and the decision. The law comes again from the environment.
+	EXPECT_EQ(llmWorld("Sindicato")->getMemory(), "Private message from Ministerio: Podemos conversar?\nDecided: none\n");
 }
 
 TEST_F(AgentsTest, SaveAndLoadKeepPersonasLawTextAISupportAndSimulatedResponses) {
@@ -644,7 +650,7 @@ TEST_F(AgentsTest, SaveAndLoadKeepPersonasLawTextAISupportAndSimulatedResponses)
 	EXPECT_EQ(loaded->getDataManager()->getNumberOfDataDefinitions(Util::TypeOf<PublicConsultationEnvironment>()), 0u);
 	auto* ministerio = static_cast<AgentNode*>(network->findNodeByName("Ministerio"));
 	EXPECT_EQ(dynamic_cast<LLMWorldModel*>(ministerio->getWorldModel())->getPersona(), "Persona of Ministerio");
-	EXPECT_EQ(dynamic_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getLawText(), "The working week has 40 hours.");
+	EXPECT_EQ(dynamic_cast<PublicConsultationEnvironment*>(network->getEnvironment())->getLawText(), LAW_TEXT);
 	AISupport* support = static_cast<LLMBehavior*>(ministerio->getBehavior())->getAISupport();
 	ASSERT_NE(support, nullptr);
 	EXPECT_EQ(support, loaded->getDataManager()->getDataDefinition(Util::TypeOf<AISupport>(), "LLM"));
