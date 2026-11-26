@@ -44,30 +44,22 @@
 #include <vector>
 
 namespace {
-// Links between agents, each as a pair (smaller, larger). The ring links each agent to the two
-// nearest agents on each side, the small world rewires each link of the ring with probability
-// 0.1, and the random network has as many links as the ring, between agents drawn at random.
+// Links between agents, each as a pair (smaller, larger), as in the model of Watts and Strogatz:
+// the ring links each agent to the two nearest agents on each side, the small world rewires each
+// link of the ring to an agent drawn at random with probability 0.1, and the random network
+// rewires every link. Every agent keeps at least the two links it rewires.
 std::set<std::pair<int, int>> links(const std::string& topology, int agents, std::mt19937& random) {
+	const double rewiring = topology == "smallworld" ? 0.1 : topology == "random" ? 1.0 : 0.0;
 	std::set<std::pair<int, int>> result;
-	auto linked = [&](int a, int b) { return result.count({std::min(a, b), std::max(a, b)}) > 0; };
 	std::uniform_int_distribution<int> anyAgent(0, agents - 1);
-	if (topology == "random") {
-		while (result.size() < 2u * agents) {
-			const int a = anyAgent(random), b = anyAgent(random);
-			if (a != b) {
-				result.insert({std::min(a, b), std::max(a, b)});
-			}
-		}
-		return result;
-	}
 	std::uniform_real_distribution<double> unif(0.0, 1.0);
 	for (int a = 0; a < agents; a++) {
 		for (int step = 1; step <= 2; step++) {
 			int b = (a + step) % agents;
-			if (topology == "smallworld" && unif(random) < 0.1) {
+			if (unif(random) < rewiring) {
 				do {
 					b = anyAgent(random);
-				} while (b == a || linked(a, b));
+				} while (b == a || result.count({std::min(a, b), std::max(a, b)}) > 0);
 			}
 			result.insert({std::min(a, b), std::max(a, b)});
 		}
