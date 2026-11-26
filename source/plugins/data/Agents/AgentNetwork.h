@@ -69,6 +69,8 @@ private:
 	bool _failureLimitPerReplication = true;
 	unsigned int _replicationFailures = 0;
 	unsigned int _totalFailures = 0;
+	Counter* _decisionsCounter = nullptr;
+	Counter* _messagesCounter = nullptr;
 	Counter* _failuresCounter = nullptr;
 	Counter* _totalFailuresCounter = nullptr;
 };

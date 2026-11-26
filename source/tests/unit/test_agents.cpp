@@ -128,6 +128,9 @@ protected:
 		return std::make_shared<TestMessage>(sender, receiver, text, type);
 	}
 	double now() { return model->getSimulation()->getSimulatedTime(); }
+	double counter(const std::string& name) {
+		return static_cast<Counter*>(model->getDataManager()->getDataDefinition(Util::TypeOf<Counter>(), name))->getCountValue();
+	}
 	// Create -> ModalModel -> Dispose, creating \p perCreation entities at the instants 0, 1, 2, ...
 	void simulate(unsigned int entities, unsigned int replications = 1, unsigned int perCreation = 1) {
 		auto* create = new Create(model, "Create");
@@ -264,9 +267,6 @@ TEST_F(AgentsTest, FailureLimitCancelsTheRoundAndStopsTheSimulation) {
 	EXPECT_EQ(perceived["A"].size(), 5u);
 	EXPECT_EQ(world("A")->value, 1);
 	EXPECT_EQ(network->getTotalFailures(), 2u);
-	auto counter = [&](const std::string& name) {
-		return static_cast<Counter*>(model->getDataManager()->getDataDefinition(Util::TypeOf<Counter>(), name))->getCountValue();
-	};
 	EXPECT_EQ(counter("Network.Failures"), 1.0);
 	EXPECT_EQ(counter("Network.TotalFailures"), 2.0);
 }
@@ -373,4 +373,23 @@ TEST_F(AgentsTest, PropertiesAreEditableInThePropertyEditor) {
 	control(network, "FailureLimitPerReplication")->setValue("false");
 	EXPECT_EQ(network->getFailureLimit(), 2u);
 	EXPECT_FALSE(network->isFailureLimitPerReplication());
+}
+
+TEST_F(AgentsTest, CountersCountDecisionsAndMessagesOfEachRound) {
+	agents({"A", "B"}, [&](const AgentPerception& perception, const TestWorldModel*, TestDecision* decision) {
+		if (perception.agent->getName() == "A") {
+			decision->messages.push_back(message(perception.agent, agent("B")));
+			decision->messages.push_back(message(perception.agent, nullptr));
+		}
+		if (perception.agent->getName() == "B" && network->getRound() == 2) {
+			throw std::runtime_error("invalid response");
+		}
+	});
+	channel("A", "B");
+	channel("B", "A");
+	environment();
+	simulate(3);
+	EXPECT_EQ(counter("Network.Decisions"), 5.0);
+	EXPECT_EQ(counter("Network.Messages"), 6.0);
+	EXPECT_EQ(counter("Network.Failures"), 1.0);
 }

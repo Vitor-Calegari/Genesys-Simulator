@@ -24,7 +24,7 @@ struct AgentPerception {
  *
  * A behavior is shared by every agent that references it. decide() reads the perception and the
  * world model and must not change any state, and throws when the decision fails. apply() runs
- * only after every agent has decided, and only for valid decisions.
+ * only after every agent has decided, and only for valid decisions. endRound() closes each round.
  */
 class AgentBehavior : public ModelDataDefinition {
 public:
@@ -37,6 +37,8 @@ public:
 	virtual std::string worldModelType() const = 0;
 	virtual std::vector<std::string> producedMessageTypes() const = 0;
 	virtual std::vector<std::string> acceptedMessageTypes() const = 0;
+	/*! \brief Records the measures of a round over the agents of this behavior, after the decisions are applied. */
+	virtual void endRound(const std::vector<AgentNode*>& /*agents*/) {}
 };
 
 #endif /* AGENTBEHAVIOR_H */

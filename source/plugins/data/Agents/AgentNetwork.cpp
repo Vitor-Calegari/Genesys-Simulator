@@ -200,14 +200,22 @@ void AgentNetwork::_createInternalStatisticReporters() {
 	DirectedGraphNetwork::_createInternalStatisticReporters();
 	if (_reportStatistics) {
 		if (_failuresCounter == nullptr) {
+			_decisionsCounter = new Counter(_parentModel, getName() + ".Decisions", this);
+			_messagesCounter = new Counter(_parentModel, getName() + ".Messages", this);
 			_failuresCounter = new Counter(_parentModel, getName() + ".Failures", this);
 			_totalFailuresCounter = new Counter(_parentModel, getName() + ".TotalFailures", this);
 		}
+		_mandatoryNonEditableDataDefinitionInsert("Decisions", _decisionsCounter);
+		_mandatoryNonEditableDataDefinitionInsert("Messages", _messagesCounter);
 		_mandatoryNonEditableDataDefinitionInsert("Failures", _failuresCounter);
 		_mandatoryNonEditableDataDefinitionInsert("TotalFailures", _totalFailuresCounter);
 	} else {
+		_mandatoryNonEditableDataDefinitionRemove("Decisions");
+		_mandatoryNonEditableDataDefinitionRemove("Messages");
 		_mandatoryNonEditableDataDefinitionRemove("Failures");
 		_mandatoryNonEditableDataDefinitionRemove("TotalFailures");
+		_decisionsCounter = nullptr;
+		_messagesCounter = nullptr;
 		_failuresCounter = nullptr;
 		_totalFailuresCounter = nullptr;
 	}
@@ -265,6 +273,7 @@ NetworkActivationResult AgentNetwork::_activate(const NetworkActivationFrame& /*
 
 	// Apply the valid decisions. An agent whose decision failed receives its messages again.
 	std::vector<std::shared_ptr<AgentMessage>> environmentMessages;
+	unsigned int messages = 0;
 	for (AgentNode* agent : agents) {
 		auto decision = decisions.find(agent);
 		if (decision == decisions.end()) {
@@ -272,6 +281,7 @@ NetworkActivationResult AgentNetwork::_activate(const NetworkActivationFrame& /*
 			continue;
 		}
 		agent->getBehavior()->apply(decision->second.get(), agent->getWorldModel());
+		messages += decision->second->messages.size();
 		for (const std::shared_ptr<AgentMessage>& message : decision->second->messages) {
 			if (message->getReceiver() != nullptr) {
 				_broker.send(message);
@@ -285,6 +295,18 @@ NetworkActivationResult AgentNetwork::_activate(const NetworkActivationFrame& /*
 		_environment->apply(environmentMessages);
 	}
 
+	// Record the round: the counters, the measures of each behavior over its agents and the trace.
+	if (_decisionsCounter != nullptr) {
+		_decisionsCounter->incCountValue(decisions.size());
+		_messagesCounter->incCountValue(messages);
+	}
+	std::map<AgentBehavior*, std::vector<AgentNode*>> agentsByBehavior;
+	for (AgentNode* agent : agents) {
+		agentsByBehavior[agent->getBehavior()].push_back(agent);
+	}
+	for (const auto& [behavior, behaviorAgents] : agentsByBehavior) {
+		behavior->endRound(behaviorAgents);
+	}
 	for (AgentNode* agent : agents) {
 		auto decision = decisions.find(agent);
 		_traceRound(agent, decision != decisions.end() ? decision->second.get() : nullptr, failures[agent]);
