@@ -10,6 +10,10 @@
 #include "plugins/components/Logic/Dispose.h"
 #include "plugins/components/ModalModel/ModalModel.h"
 #include "plugins/data/Agents/AgentNetwork.h"
+#include "plugins/data/Agents/RuleBehavior.h"
+#include "plugins/data/Agents/RuleWorldModel.h"
+#include "plugins/data/Logic/Variable.h"
+#include "kernel/simulator/essentialPlugins/StatisticsCollector.h"
 
 #include <cstdio>
 #include <fstream>
@@ -87,15 +91,16 @@ std::vector<std::string> texts(const std::vector<std::shared_ptr<AgentMessage>>&
 	return result;
 }
 
-class AgentsTest : public testing::Test {
-protected:
+// A model with one AgentNetwork, activated by Create -> ModalModel -> Dispose.
+class AgentModel {
+public:
 	Simulator simulator;
 	Model* model = simulator.getModelManager()->newModel();
 	AgentNetwork* network = new AgentNetwork(model, "Network");
 	// Perceptions of each agent, one per round, in every replication.
 	std::map<std::string, std::vector<AgentPerception>> perceived;
 
-	void SetUp() override { simulator.getPluginManager()->autoInsertPlugins(); }
+	AgentModel() { simulator.getPluginManager()->autoInsertPlugins(); }
 
 	// Creates the agents in the given order, all with one behavior whose decide() is \p decide.
 	void agents(const std::vector<std::string>& names, TestBehavior::Decide decide) {
@@ -112,11 +117,25 @@ protected:
 	}
 	AgentNode* agent(const std::string& name) { return static_cast<AgentNode*>(network->findNodeByName(name)); }
 	TestWorldModel* world(const std::string& name) { return static_cast<TestWorldModel*>(agent(name)->getWorldModel()); }
-	void channel(const std::string& source, const std::string& destination) {
+	// Creates rule-based agents that share one RuleBehavior, each with the given initial values.
+	RuleBehavior* ruleAgents(const std::map<std::string, std::string>& initialValues) {
+		auto* behavior = new RuleBehavior(model, "Rules");
+		for (const auto& [name, values] : initialValues) {
+			auto* agent = new AgentNode(model, name);
+			agent->setBehavior(behavior);
+			auto* world = new RuleWorldModel(model);
+			world->setInitialValues(values);
+			agent->setWorldModel(world);
+			network->addNode(agent);
+		}
+		return behavior;
+	}
+	RuleWorldModel* ruleWorld(const std::string& name) { return static_cast<RuleWorldModel*>(agent(name)->getWorldModel()); }
+	void channel(const std::string& source, const std::string& destination, const std::string& type = "TestMessage") {
 		auto* channel = new AgentChannel(model, source + destination);
 		channel->setSource(agent(source));
 		channel->setDestination(agent(destination));
-		channel->setAcceptedMessageTypes({"TestMessage"});
+		channel->setAcceptedMessageTypes({type});
 		network->addEdge(channel);
 	}
 	TestEnvironment* environment() {
@@ -133,6 +152,11 @@ protected:
 	}
 	// Create -> ModalModel -> Dispose, creating \p perCreation entities at the instants 0, 1, 2, ...
 	void simulate(unsigned int entities, unsigned int replications = 1, unsigned int perCreation = 1) {
+		flow(entities, replications, perCreation);
+		ASSERT_TRUE(model->check());
+		model->getSimulation()->start();
+	}
+	void flow(unsigned int entities, unsigned int replications = 1, unsigned int perCreation = 1) {
 		auto* create = new Create(model, "Create");
 		create->setEntityType(new EntityType(model, "Token"));
 		create->setFirstCreation(0.0);
@@ -145,10 +169,32 @@ protected:
 		modal->connectTo(new Dispose(model, "Dispose"));
 		model->getSimulation()->setReplicationLength(100.0, Util::TimeUnit::second);
 		model->getSimulation()->setNumberOfReplications(replications);
-		ASSERT_TRUE(model->check());
-		model->getSimulation()->start();
 	}
 };
+
+class AgentsTest : public testing::Test, public AgentModel {};
+
+// Credulous agents in a ring where only A starts informed, as in the dissemination example.
+std::map<std::string, double> disseminate() {
+	AgentModel ring;
+	new Variable(ring.model, "informado");
+	new Variable(ring.model, "recebidos");
+	(new Variable(ring.model, "p"))->setInitialValue(0.5);
+	RuleBehavior* credulous = ring.ruleAgents({{"A", "informado=1"}, {"B", ""}, {"C", ""}, {"D", ""}, {"E", ""}, {"F", ""}});
+	credulous->setRules("informado = informado or (recebidos > 0 and UNIF(0, 1) < p)");
+	credulous->setCondition("informado == 1");
+	credulous->setPerceptionVariable("recebidos");
+	const std::vector<std::string> names{"A", "B", "C", "D", "E", "F"};
+	for (std::size_t i = 0; i < names.size(); i++) {
+		ring.channel(names[i], names[(i + 1) % names.size()], "RuleMessage");
+	}
+	ring.simulate(8);
+	std::map<std::string, double> informed;
+	for (const std::string& name : names) {
+		informed[name] = ring.ruleWorld(name)->getValue("informado", 0.0);
+	}
+	return informed;
+}
 
 } // namespace
 
@@ -392,4 +438,82 @@ TEST_F(AgentsTest, CountersCountDecisionsAndMessagesOfEachRound) {
 	EXPECT_EQ(counter("Network.Decisions"), 5.0);
 	EXPECT_EQ(counter("Network.Messages"), 6.0);
 	EXPECT_EQ(counter("Network.Failures"), 1.0);
+}
+
+TEST_F(AgentsTest, SaveAndLoadKeepAgentsChannelsAndWorldModels) {
+	new Variable(model, "x");
+	ruleAgents({{"A", "x=10"}, {"B", "x=20"}})->setRules("x = x + 1");
+	channel("A", "B", "RuleMessage");
+	channel("B", "A", "RuleMessage");
+	network->setFailureLimit(3);
+	flow(2);
+	const std::string filename = testing::TempDir() + "genesys_test_agents_rules.gen";
+	ASSERT_TRUE(model->save(filename));
+
+	Model* loaded = simulator.getModelManager()->newModel();
+	ASSERT_TRUE(loaded->load(filename));
+	std::remove(filename.c_str());
+	auto* network = dynamic_cast<AgentNetwork*>(loaded->getDataManager()->getDataDefinition(Util::TypeOf<AgentNetwork>(), "Network"));
+	ASSERT_NE(network, nullptr);
+	EXPECT_EQ(network->getFailureLimit(), 3u);
+	EXPECT_EQ(loaded->getDataManager()->getNumberOfDataDefinitions(Util::TypeOf<AgentNode>()), 2u);
+	EXPECT_EQ(loaded->getDataManager()->getNumberOfDataDefinitions(Util::TypeOf<RuleWorldModel>()), 0u);
+	auto* a = static_cast<AgentNode*>(network->findNodeByName("A"));
+	auto* b = static_cast<AgentNode*>(network->findNodeByName("B"));
+	EXPECT_EQ(static_cast<RuleBehavior*>(a->getBehavior())->getRules(), "x = x + 1");
+	EXPECT_EQ(b->getBehavior(), a->getBehavior());
+	EXPECT_EQ(dynamic_cast<RuleWorldModel*>(a->getWorldModel())->getInitialValues(), "x=10");
+	EXPECT_EQ(dynamic_cast<RuleWorldModel*>(b->getWorldModel())->getInitialValues(), "x=20");
+	auto* ab = static_cast<AgentChannel*>(network->findEdgeByName("AB"));
+	EXPECT_EQ(ab->getSource(), a);
+	EXPECT_EQ(ab->getDestination(), b);
+	EXPECT_EQ(ab->acceptedMessageTypes(), (std::vector<std::string>{"RuleMessage"}));
+	EXPECT_EQ(network->getEdges().size(), 2u);
+
+	ASSERT_TRUE(loaded->check());
+	loaded->getSimulation()->start();
+	EXPECT_EQ(network->getRound(), 2u);
+	EXPECT_EQ(dynamic_cast<RuleWorldModel*>(a->getWorldModel())->getValue("x", 0), 12.0);
+}
+
+TEST_F(AgentsTest, RulesUseOnlyTheAgentValuesAndVariablesKeepTheirOwn) {
+	auto* x = new Variable(model, "x");
+	x->setInitialValue(100);
+	RuleBehavior* behavior = ruleAgents({{"A", "x=10"}, {"B", "x=20"}});
+	behavior->setRules("x = x + 1");
+	behavior->setCondition("0");
+	behavior->setMeasuredVariables("x");
+	channel("A", "B", "RuleMessage");
+	channel("B", "A", "RuleMessage");
+	simulate(3);
+	EXPECT_EQ(ruleWorld("A")->getValue("x", 0), 13.0);
+	EXPECT_EQ(ruleWorld("B")->getValue("x", 0), 23.0);
+	EXPECT_EQ(x->getValue(), 100.0);
+	auto collector = [&](const std::string& name) {
+		return static_cast<StatisticsCollector*>(model->getDataManager()->getDataDefinition(Util::TypeOf<StatisticsCollector>(), name))->getStatistics();
+	};
+	// One value of each agent per round, and one average over the agents per round.
+	EXPECT_EQ(collector("Rules.x")->numElements(), 6u);
+	EXPECT_EQ(collector("Rules.x.Average")->numElements(), 3u);
+	EXPECT_DOUBLE_EQ(collector("Rules.x.Average")->average(), 17.0);
+}
+
+TEST(AgentsDisseminationTest, SameSeedGivesTheSameResult) {
+	const std::map<std::string, double> first = disseminate();
+	EXPECT_EQ(first, disseminate());
+	EXPECT_EQ(first.at("A"), 1.0);
+	EXPECT_GT(first.at("B"), 0.0);
+}
+
+TEST_F(AgentsTest, RuleCheckRejectsUnknownVariables) {
+	new Variable(model, "x");
+	auto* behavior = new RuleBehavior(model, "Rules");
+	behavior->setRules("x = x + 1; y = x");
+	behavior->setCondition("w > 0");
+	behavior->setMeasuredVariables("x, z");
+	std::string error;
+	EXPECT_FALSE(ModelDataDefinition::Check(behavior, error));
+	EXPECT_NE(error.find("Rules uses unknown Variable \"y\""), std::string::npos) << error;
+	EXPECT_NE(error.find("MeasuredVariables uses unknown Variable \"z\""), std::string::npos);
+	EXPECT_NE(error.find("Expression \"w > 0\""), std::string::npos);
 }
