@@ -28,6 +28,8 @@ public:
     std::string getApiKeyEnvironmentVariable() const;
     void setSystemInstructions(std::string value);
     std::string getSystemInstructions() const;
+    void setSimulatedResponses(std::string value);
+    std::string getSimulatedResponses() const;
     void setTemperature(double value);
     double getTemperature() const;
     void setMaxOutputTokens(unsigned int value);
@@ -70,6 +72,7 @@ private:
         bool conversationEnabled = true;
         unsigned int maxHistoryMessages = 20;
         bool clearHistoryBetweenReplications = true;
+        std::string simulatedResponses = "";
     } DEFAULT;
 
     std::string _provider = DEFAULT.provider;
@@ -84,6 +87,7 @@ private:
     bool _conversationEnabled = DEFAULT.conversationEnabled;
     unsigned int _maxHistoryMessages = DEFAULT.maxHistoryMessages;
     bool _clearHistoryBetweenReplications = DEFAULT.clearHistoryBetweenReplications;
+    std::string _simulatedResponses = DEFAULT.simulatedResponses;
     unsigned long _callCount = 0;
     unsigned long _failureCount = 0;
     AIConversationService _service;

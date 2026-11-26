@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-enum class AIConversationProvider { OpenAI, Anthropic, Local };
+enum class AIConversationProvider { OpenAI, Anthropic, Local, Simulated };
 
 struct AIConversationConfiguration {
     AIConversationProvider provider = AIConversationProvider::Local;
@@ -22,6 +22,7 @@ struct AIConversationConfiguration {
     bool highReasoningMode = false;
     bool conversationEnabled = true;
     unsigned int maxHistoryMessages = 20;
+    std::string simulatedResponses;
 };
 
 struct AIConversationResponse {

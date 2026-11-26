@@ -3,6 +3,7 @@
 #include "AnthropicProviderClientImpl.h"
 #include "LocalProviderClientImpl.h"
 #include "OpenAIProviderClientImpl.h"
+#include "SimulatedProviderClientImpl.h"
 
 #include <cstdlib>
 
@@ -25,6 +26,9 @@ bool AIConversationService::initialize(std::string& errorMessage) {
         break;
     case AIConversationProvider::Local:
         _client = std::make_unique<LocalProviderClientImpl>();
+        break;
+    case AIConversationProvider::Simulated:
+        _client = std::make_unique<SimulatedProviderClientImpl>(_configuration.simulatedResponses);
         break;
     }
     if (!_configuration.baseUrl.empty()) {

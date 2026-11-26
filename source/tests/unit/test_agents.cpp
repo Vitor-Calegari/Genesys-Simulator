@@ -9,6 +9,7 @@
 #include "plugins/components/Logic/Create.h"
 #include "plugins/components/Logic/Dispose.h"
 #include "plugins/components/ModalModel/ModalModel.h"
+#include "plugins/data/AI/AISupport.h"
 #include "plugins/data/Agents/AgentNetwork.h"
 #include "plugins/data/Agents/RuleBehavior.h"
 #include "plugins/data/Agents/RuleWorldModel.h"
@@ -516,4 +517,17 @@ TEST_F(AgentsTest, RuleCheckRejectsUnknownVariables) {
 	EXPECT_NE(error.find("Rules uses unknown Variable \"y\""), std::string::npos) << error;
 	EXPECT_NE(error.find("MeasuredVariables uses unknown Variable \"z\""), std::string::npos);
 	EXPECT_NE(error.find("Expression \"w > 0\""), std::string::npos);
+}
+
+TEST_F(AgentsTest, SimulatedProviderGivesEachAgentItsNthResponseAndRestartsEachReplication) {
+	auto* support = new AISupport(model, "LLM");
+	support->setProvider("Simulated");
+	support->setSimulatedResponses("A: a1\nB: b1\nA: a2\n");
+	auto ask = [&](const std::string& agent) { return support->converse(agent, "Agent: " + agent + "\nPersona: none").content; };
+	EXPECT_EQ(ask("B"), "b1");
+	EXPECT_EQ(ask("A"), "a1");
+	EXPECT_EQ(ask("A"), "a2");
+	EXPECT_EQ(ask("B"), "{\"action\": \"none\"}");
+	ModelDataDefinition::InitBetweenReplications(support);
+	EXPECT_EQ(ask("A"), "a1");
 }

@@ -4,6 +4,7 @@ add_library(genesys_ai_provider STATIC
     HttpProviderClientBase.cpp
     LocalProviderClientImpl.cpp
     OpenAIProviderClientImpl.cpp
+    SimulatedProviderClientImpl.cpp
 )
 
 target_include_directories(genesys_ai_provider PUBLIC ${CMAKE_SOURCE_DIR}/source)

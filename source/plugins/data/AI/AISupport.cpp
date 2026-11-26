@@ -31,6 +31,12 @@ AISupport::AISupport(Model* model, std::string name)
     addString("BaseUrl", std::bind(&AISupport::getBaseUrl, this), std::bind(&AISupport::setBaseUrl, this, std::placeholders::_1));
     addString("ApiKeyEnvironmentVariable", std::bind(&AISupport::getApiKeyEnvironmentVariable, this), std::bind(&AISupport::setApiKeyEnvironmentVariable, this, std::placeholders::_1));
     addString("SystemInstructions", std::bind(&AISupport::getSystemInstructions, this), std::bind(&AISupport::setSystemInstructions, this, std::placeholders::_1));
+    auto* simulatedResponses = new SimulationControlString(
+        std::bind(&AISupport::getSimulatedResponses, this), std::bind(&AISupport::setSimulatedResponses, this, std::placeholders::_1),
+        Util::TypeOf<AISupport>(), getName(), "SimulatedResponses",
+        "Responses of the Simulated provider, one per line as agent: response. The n-th call of an agent receives its n-th response.");
+    simulatedResponses->setPreferredEditorHint(SimulationControlEditorHint::MultiLineText);
+    _parentModel->getControls()->insert(simulatedResponses); _addSimulationControl(simulatedResponses);
     auto addDouble = [this](const std::string& property, auto getter, auto setter) {
         auto* control = new SimulationControlDouble(getter, setter, Util::TypeOf<AISupport>(), getName(), property);
         _parentModel->getControls()->insert(control); _addSimulationControl(control);
@@ -82,6 +88,7 @@ AI_STRING_PROPERTY(Model, _model)
 AI_STRING_PROPERTY(BaseUrl, _baseUrl)
 AI_STRING_PROPERTY(ApiKeyEnvironmentVariable, _apiKeyEnvironmentVariable)
 AI_STRING_PROPERTY(SystemInstructions, _systemInstructions)
+AI_STRING_PROPERTY(SimulatedResponses, _simulatedResponses)
 #undef AI_STRING_PROPERTY
 
 void AISupport::setTemperature(double v) { _temperature = v; _configurationChanged(); }
@@ -119,6 +126,7 @@ bool AISupport::_loadInstance(PersistenceRecord* f) {
     _conversationEnabled = f->loadField("conversationEnabled", DEFAULT.conversationEnabled);
     _maxHistoryMessages = f->loadField("maxHistoryMessages", DEFAULT.maxHistoryMessages);
     _clearHistoryBetweenReplications = f->loadField("clearHistoryBetweenReplications", DEFAULT.clearHistoryBetweenReplications);
+    _simulatedResponses = f->loadField("simulatedResponses", DEFAULT.simulatedResponses);
     _configurationChanged();
     return ok;
 }
@@ -137,11 +145,12 @@ void AISupport::_saveInstance(PersistenceRecord* f, bool defaults) {
     f->saveField("conversationEnabled", _conversationEnabled, DEFAULT.conversationEnabled, defaults);
     f->saveField("maxHistoryMessages", _maxHistoryMessages, DEFAULT.maxHistoryMessages, defaults);
     f->saveField("clearHistoryBetweenReplications", _clearHistoryBetweenReplications, DEFAULT.clearHistoryBetweenReplications, defaults);
+    f->saveField("simulatedResponses", _simulatedResponses, DEFAULT.simulatedResponses, defaults);
 }
 
 bool AISupport::_check(std::string& error) {
     const std::string provider = lower(_provider);
-    if (provider != "openai" && provider != "anthropic" && provider != "local") error += "AISupport provider must be OpenAI, Anthropic, or Local. ";
+    if (provider != "openai" && provider != "anthropic" && provider != "local" && provider != "simulated") error += "AISupport provider must be OpenAI, Anthropic, Local, or Simulated. ";
     if (_model.empty()) error += "AISupport model must not be empty. ";
     if (_temperature < 0.0 || _temperature > 2.0) error += "AISupport temperature must be between 0 and 2. ";
     if (_maxOutputTokens == 0) error += "AISupport maxOutputTokens must be greater than zero. ";
@@ -151,6 +160,8 @@ bool AISupport::_check(std::string& error) {
 void AISupport::_initBetweenReplications() {
     _callCount = 0; _failureCount = 0;
     if (_clearHistoryBetweenReplications) clearAllConversations();
+    // The simulated provider counts the calls of each agent, and a new client starts the count again.
+    if (lower(_provider) == "simulated") _configurationChanged();
 }
 
 void AISupport::_configurationChanged() {
@@ -162,6 +173,7 @@ AIConversationConfiguration AISupport::_makeConfiguration() const {
     const std::string provider = lower(_provider);
     config.provider = provider == "openai" ? AIConversationProvider::OpenAI
                     : provider == "anthropic" ? AIConversationProvider::Anthropic
+                    : provider == "simulated" ? AIConversationProvider::Simulated
                     : AIConversationProvider::Local;
     config.model = _model; config.baseUrl = _baseUrl;
     config.apiKeyEnvironmentVariable = _apiKeyEnvironmentVariable;
@@ -169,5 +181,6 @@ AIConversationConfiguration AISupport::_makeConfiguration() const {
     config.temperature = _temperature; config.maxOutputTokens = _maxOutputTokens;
     config.timeoutSeconds = _timeoutSeconds; config.highReasoningMode = _highReasoningMode;
     config.conversationEnabled = _conversationEnabled; config.maxHistoryMessages = _maxHistoryMessages;
+    config.simulatedResponses = _simulatedResponses;
     return config;
 }
