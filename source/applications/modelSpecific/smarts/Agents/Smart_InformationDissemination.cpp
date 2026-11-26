@@ -15,7 +15,8 @@
  *   --replications=N                   (1)
  *   --trace=0|1                        (1)
  * With the trace on, each round writes one line per agent with its values, from which the
- * fraction of informed agents per round is read.
+ * fraction of informed agents per round is read. At the end it prints the time per round and,
+ * on Linux, the peak resident memory of the process.
  */
 
 #include "Smart_InformationDissemination.h"
@@ -34,11 +35,13 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <numeric>
 #include <random>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -161,8 +164,15 @@ int Smart_InformationDissemination::main(int argc, char** argv) {
 	const auto start = std::chrono::steady_clock::now();
 	model->getSimulation()->start();
 	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+	unsigned long peakMemoryKB = 0;
+	std::ifstream status("/proc/self/status");
+	for (std::string line; std::getline(status, line);) {
+		if (line.rfind("VmHWM:", 0) == 0) {
+			std::istringstream(line.substr(6)) >> peakMemoryKB;
+		}
+	}
 	std::cout << "rounds=" << network->getRound() << " replications=" << replications << " seconds=" << seconds
-			  << " secondsPerRound=" << seconds / (rounds * replications) << std::endl;
+			  << " secondsPerRound=" << seconds / (rounds * replications) << " peakMemoryKB=" << peakMemoryKB << std::endl;
 	delete genesys;
 	return 0;
 }
