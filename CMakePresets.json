@@ -150,6 +150,28 @@
       }
     },
     {
+      "name": "terminal-smart-information-dissemination",
+      "displayName": "Application - Terminal Smart (Smart_InformationDissemination)",
+      "description": "Builds the terminal application directly as the Smart_InformationDissemination agent example, without LLM.",
+      "inherits": "terminal-model-specific",
+      "binaryDir": "${sourceDir}/build/terminal-smart-information-dissemination",
+      "cacheVariables": {
+        "GENESYS_TERMINAL_EXAMPLE": "smarts/Agents/Smart_InformationDissemination.cpp",
+        "GENESYS_TERMINAL_EXAMPLE_CLASS": ""
+      }
+    },
+    {
+      "name": "terminal-smart-public-consultation",
+      "displayName": "Application - Terminal Smart (Smart_PublicConsultation)",
+      "description": "Builds the terminal application directly as the Smart_PublicConsultation agent example, with LLM agents.",
+      "inherits": "terminal-model-specific",
+      "binaryDir": "${sourceDir}/build/terminal-smart-public-consultation",
+      "cacheVariables": {
+        "GENESYS_TERMINAL_EXAMPLE": "smarts/Agents/Smart_PublicConsultation.cpp",
+        "GENESYS_TERMINAL_EXAMPLE_CLASS": ""
+      }
+    },
+    {
       "name": "worker-app",
       "displayName": "Application - Worker",
       "inherits": "debug-base",
@@ -337,6 +359,20 @@
     {
       "name": "terminal-smart-ai-assistant",
       "configurePreset": "terminal-smart-ai-assistant",
+      "targets": [
+        "genesys_terminal_application"
+      ]
+    },
+    {
+      "name": "terminal-smart-information-dissemination",
+      "configurePreset": "terminal-smart-information-dissemination",
+      "targets": [
+        "genesys_terminal_application"
+      ]
+    },
+    {
+      "name": "terminal-smart-public-consultation",
+      "configurePreset": "terminal-smart-public-consultation",
       "targets": [
         "genesys_terminal_application"
       ]
